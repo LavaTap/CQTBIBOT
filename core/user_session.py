@@ -26,6 +26,7 @@ class SessionStep(enum.Enum):
     WAITING_UPDATE_CAPTCHA = 6      # 等待验证码（#更新 流程中重新登录）
     WAITING_PASSWORD_UPDATE_CAPTCHA = 7  # 等待验证码（#密码更新 流程中重新登录）
     WAITING_APPLY_CAPTCHA = 8        # 等待验证码（#报名 流程中输入活动报名验证码）
+    WAITING_APPLY_ACTIVITY_ID = 9    # 等待输入活动 ID（#报名 流程，未带参数时）
 
 
 class UserSession:

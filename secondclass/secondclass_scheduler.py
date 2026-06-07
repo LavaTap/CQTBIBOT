@@ -104,6 +104,18 @@ class SecondClassScheduler:
                          result.get("total_count", 0),
                          result.get("detail_fetched", 0))
 
+                # 拉取未结束活动（报名中+活动中+未开始）写入独立表
+                try:
+                    unfinished_result = secondclass_tool.fetch_and_store_my_unfinished_activities(
+                        sess, student_id=student_id, qq=qq,
+                    )
+                    log.info("用户 %s(%s) 未结束活动: %s",
+                             student_id, realname or "?",
+                             unfinished_result.get("total", 0))
+                except Exception as e:
+                    log.warning("用户 %s(%s) 未结束活动拉取失败: %s",
+                                student_id, realname or "?", e)
+
             except secondclass_tool.SecondClassAuthError as e:
                 log.warning("用户 %s(%s) 认证失败: %s", student_id, realname or "?", e)
                 expired_count += 1

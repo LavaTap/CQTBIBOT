@@ -163,6 +163,7 @@ class CommandHandler:
     CMD_ER_CHART = "#二课图表"
     CMD_VIEW_ER = "#查看二课"
     CMD_ER_LIST = "#二课列表"
+    CMD_MY_ER = "#我的二课"
     CMD_PASSWORD_UPDATE = "#密码更新"
     CMD_CANCEL = "#取消"
     CMD_REFRESH_CAPTCHA = "#刷新验证码"
@@ -321,6 +322,13 @@ class CommandHandler:
             ).start()
             return True
 
+        if cmd == self.CMD_MY_ER:
+            threading.Thread(
+                target=self._cmd_my_er,
+                args=(msg_type, group_id, user_id), daemon=True,
+            ).start()
+            return True
+
         if cmd == self.CMD_PASSWORD_UPDATE:
             threading.Thread(
                 target=self._cmd_password_update,
@@ -328,7 +336,7 @@ class CommandHandler:
             ).start()
             return True
 
-        # #报名 <活动ID> — 先匹配 "报名" 指令，再从原文提取活动ID
+        # #报名 [活动ID] — 不带 ID 时进入等待 ID 状态；带 ID 直接进入报名流程
         if cmd == self.CMD_APPLY:
             m_apply = re.match(r"#报名\s*(\d{4,})", normalized)
             if m_apply:
@@ -338,8 +346,13 @@ class CommandHandler:
                     args=(msg_type, group_id, user_id, activity_id), daemon=True,
                 ).start()
                 return True
+            # 未带 ID → 进入等待活动 ID 的对话状态
+            from core.user_session import SessionStep, create_or_get_session
+            session = create_or_get_session(user_id, msg_type, group_id)
+            session.step = SessionStep.WAITING_APPLY_ACTIVITY_ID
+            session.touch()
             self._reply(msg_type, group_id, user_id,
-                        "格式：#报名 <活动ID>\n例：#报名 121499")
+                        "请输入要报名的活动 ID（4 位以上数字），发送 #取消 可取消。")
             return True
 
         if cmd == self.CMD_HELP:
@@ -607,6 +620,22 @@ class CommandHandler:
             threading.Thread(
                 target=self._bg_password_update_do_login,
                 args=(user_id, rcode), daemon=True,
+            ).start()
+            return True
+
+        # #报名 流程中：收到活动 ID → 进入报名流程
+        if step == SessionStep.WAITING_APPLY_ACTIVITY_ID:
+            activity_id = text.strip()
+            if not re.match(r"^\d{4,}$", activity_id):
+                self._reply(msg_type, group_id, user_id,
+                            "活动 ID 不正确，请输入 4 位以上的数字，或发送 #取消 取消")
+                return True
+            # 清除等待状态，避免在 _cmd_apply 内创建会话时冲突
+            from core.user_session import remove_session
+            remove_session(user_id)
+            threading.Thread(
+                target=self._cmd_apply,
+                args=(msg_type, group_id, user_id, activity_id), daemon=True,
             ).start()
             return True
 
@@ -2061,6 +2090,146 @@ class CommandHandler:
             tb = traceback.format_exc()
             self._reply(msg_type, group_id, user_id, "生成二课列表失败")
             self._send_log_as_forward(msg_type, group_id, user_id, "#二课列表 错误日志", tb)
+
+
+    def _cmd_my_er(self, msg_type: str, group_id: int, user_id: int) -> None:
+        """#我的二课：从独立表读取未结束活动ID，逐张渲染卡片后合并转发。"""
+        from pathlib import Path
+        try:
+            # ── 1. 查找 student_id ──
+            from secondclass.secondclass_tool import SecondClassDB
+            sc_data = SecondClassDB().get_by_qq(user_id)
+            student_id = ""
+            if sc_data:
+                student_id = sc_data.get("student_id", "")
+            if not student_id:
+                user = get_user_from_users_db(user_id)
+                if user:
+                    student_id = user.get("student_id", "")
+            if not student_id:
+                from core.account_store import find_account_by_qq
+                acc = find_account_by_qq(user_id)
+                if acc:
+                    student_id = acc.get("student_id", "")
+            if not student_id:
+                self._reply(msg_type, group_id, user_id,
+                            "未关联学号，请先使用 #登录 或 #扫码登录")
+                return
+
+            realname = sc_data.get("realname", "") if sc_data else ""
+
+            # ── 2. 从独立表读取未结束活动ID ──
+            from secondclass.secondclass_tool import SecondClassUserActivityDB
+            user_act_db = SecondClassUserActivityDB()
+            activity_ids = user_act_db.get_activity_ids_by_student_id(student_id)
+            if not activity_ids:
+                self._reply(msg_type, group_id, user_id,
+                            "您当前没有未结束的活动（报名中/活动中/未开始）")
+                return
+
+            total = len(activity_ids)
+            self._reply(msg_type, group_id, user_id,
+                        "正在渲染 %s 的未结束活动(%d个)，请稍候…" % (
+                            f"{realname}({student_id})" if realname else student_id, total))
+
+            # ── 3. 逐张渲染活动卡片（已有缓存则跳过）──
+            from secondclass.secondclass_activity_chart import (
+                render_activity_card, OUTPUT_DIR as CARD_DIR,
+            )
+            from secondclass.secondclass_tool import (
+                SecondClassActivityDetailDB, get_all_user_credentials,
+                obtain_secondclass_session_from_user,
+                fetch_activity_detail_page, fetch_and_save_activity_detail,
+            )
+            CARD_DIR.mkdir(parents=True, exist_ok=True)
+            detail_db = SecondClassActivityDetailDB()
+
+            card_paths: list[Path] = []
+            need_session = True
+            sess = None
+
+            for aid in activity_ids:
+                try:
+                    cache_path = CARD_DIR / f"{aid}.png"
+                    if cache_path.exists():
+                        card_paths.append(cache_path)
+                        continue
+
+                    detail = detail_db.get_by_activity_id(aid)
+                    has_cached = detail and detail.get("activity_name") and "跳转提示" not in str(detail.get("activity_name", ""))
+
+                    if not has_cached:
+                        if need_session:
+                            users = [u for u in get_all_user_credentials() if u.get("student_id")]
+                            if users:
+                                for u in users:
+                                    try:
+                                        sess = obtain_secondclass_session_from_user(u)
+                                        if sess:
+                                            break
+                                    except Exception:
+                                        continue
+                            need_session = False
+
+                        if not sess:
+                            self._reply(msg_type, group_id, user_id,
+                                        "会话已过期，未结束活动部分渲染可能不完整")
+                            break
+
+                        detail = fetch_activity_detail_page(sess, aid)
+                        aname = (detail.get("activity_name") or "") if detail else ""
+                        if not aname or "跳转提示" in aname:
+                            continue
+                        fetch_and_save_activity_detail(sess, student_id, aid)
+                        detail = detail_db.get_by_activity_id(aid)
+
+                    if detail and detail.get("activity_name"):
+                        card_path = render_activity_card(dict(detail), output_dir=CARD_DIR)
+                        card_paths.append(card_path)
+                except Exception:
+                    continue
+
+            if not card_paths:
+                self._reply(msg_type, group_id, user_id, "没有可展示的活动卡片")
+                return
+
+            # ── 4. 合并转发 ──
+            sender_name = "我的二课"
+            admin_qq = str(self._config.get("admin_qq", user_id))
+            nodes: list[dict] = []
+            for fp in card_paths:
+                if not fp.exists():
+                    continue
+                file_uri = fp.resolve().as_uri()
+                nodes.append({
+                    "type": "node",
+                    "data": {
+                        "name": sender_name,
+                        "uin": admin_qq,
+                        "content": [
+                            {"type": "image", "data": {"file": file_uri}},
+                        ],
+                    },
+                })
+
+            if not nodes:
+                self._reply(msg_type, group_id, user_id, "渲染图片为空")
+                return
+
+            if msg_type == "group":
+                self._forwarder.send_group_forward_msg(group_id, nodes)
+            else:
+                self._forwarder.send_private_forward_msg(user_id, nodes)
+
+            log.info("#我的二课 完成: qq=%s student_id=%s 活动=%d 卡片=%d",
+                     user_id, student_id, total, len(card_paths))
+
+        except Exception as e:
+            log.error("#我的二课 异常: %s", e)
+            import traceback
+            tb = traceback.format_exc()
+            self._reply(msg_type, group_id, user_id, "查询我的二课失败")
+            self._send_log_as_forward(msg_type, group_id, user_id, "#我的二课 错误日志", tb)
 
 
     def _cmd_activity_detail(self, msg_type: str, group_id: int, user_id: int,

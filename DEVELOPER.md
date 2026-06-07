@@ -1,6 +1,6 @@
 # SSO Tools — 教务工具集开发者手册
 
-> **版本**: v1.4 | **最后更新**: 2026-06-05
+> **版本**: v1.6 | **最后更新**: 2026-06-07
 
 ---
 
@@ -491,8 +491,9 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 | 类 | 数据表 | 主键 | 说明 |
 |-----|--------|------|------|
 | `SecondClassDB` | `second_class_v2` | `student_id` | 二课积分快照 |
-| `SecondClassMasterDB` | `second_class_master_v2` | `activity_id`（唯一） | 活动总表 |
-| `SecondClassActivityDetailDB` | `second_class_activity_detail_v3` | `activity_id`（唯一） | 活动详情 |
+| `SecondClassMasterDB` | `second_class_master_v2` | `(student_id, activity_id)` | 活动总表 |
+| `SecondClassUserActivityDB` | `second_class_user_activities` | `(student_id, activity_id)` | 用户未结束活动（报名中+活动中+未开始） |
+| `SecondClassActivityDetailDB` | `second_class_activity_detail_v3` | `activity_id` | 活动详情 |
 
 **核心函数**：
 
@@ -501,9 +502,10 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 | `obtain_secondclass_session_from_user(user)` | 从 user dict 获取二课 SSID 会话 |
 | `fetch_all_with_session(sess, ...)` | 一站式抓取积分+活动计数+分类积分+时长 |
 | `fetch_and_save_secondclass_info(user_id, user)` | 抓取并保存用户二课信息（统一入口） |
-| `fetch_and_store_master_data(sess, student_id, ...)` | 抓取并保存活动总表（可报名+我的活动） |
+| `fetch_and_store_master_data(sess, student_id, ...)` | 抓取并保存活动总表（可报名活动，不再拉取我的活动） |
+| `fetch_and_store_my_unfinished_activities(sess, ...)` | 拉取"我的活动"未结束标签页（报名中+活动中+未开始）存入独立表 |
 | `fetch_activities_can_apply(sess, ...)` | 获取可报名活动列表 |
-| `fetch_all_my_activities(sess)` | 获取"我的活动"所有标签页（报名中/活动中/已结束/其它/未开始） |
+| `fetch_all_my_activities(sess)` | 获取"我的活动"所有标签页（旧函数，被调度器不再直接调用） |
 | `fetch_activity_detail_page(sess, activity_id)` | 获取单个活动详情（apply.html）并全面解析 |
 | `fetch_and_store_all_activity_details(sess, ...)` | 批量拉取活动详情并存入 DB |
 | `fetch_and_save_activity_detail(sess, ...)` | 单个活动详情获取+保存 |
@@ -530,15 +532,245 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 
 **校验逻辑**：在 `fetch_and_store_all_activity_details()` 和 `fetch_and_save_activity_detail()` 中，如果解析出的 `activity_name` 为空，会记录 `log.error` 并**仅清理 detail 记录**，**保留 master 记录**（master 来自"我的活动"等合法来源，不应因详情页解析失败而被删除）。
 
+### 4.15.1 活动总表（`second_class_master_v2`）录入逻辑与数据流
+
+`second_class_master_v2` 表存储二课系统的活动总表数据，当前仅包含可报名活动（我的活动已分离到独立表）。
+
+#### 录入入口
+
+核心函数 `fetch_and_store_master_data()` 是**唯一统一入口**，在调度器和 QQ 指令中被调用。内部按顺序执行以下步骤：
+
+| 步骤 | 函数 | 数据来源 | 写入方式 |
+|------|------|----------|----------|
+| **1. 可报名活动** | `fetch_activities_can_apply()` | `POST /Student/Activity/getActivityCanApply.html` | `master_db.upsert_activities()` |
+| **2. 活动详情**（可选） | `fetch_and_store_all_activity_details()` | `GET /Student/Activity/apply.html?activityID=xxx` | `detail_db.upsert()` 写入 v3 表 |
+| **3. 扫描新活动**（可选） | `discover_new_activities()` | 遍历 activity_id 范围试探 | `master_db.upsert_activities()` |
+
+#### 数据流向
+
+```
+fetch_and_store_master_data(sess, student_id, qq, ...)
+ │
+ ├─ Step 1: fetch_activities_can_apply()
+ │   POST /Student/Activity/getActivityCanApply.html
+ │   请求参数: moduleID, typeID, keywords, sortByTime, sortByScore
+ │   响应解析: 支持多种 JSON 格式（数组 / {rows} / {data}）
+ │   → SecondClassMasterDB.upsert_activities() 批量写入
+ │
+ ├─ Step 2 (可选, fetch_details=True): fetch_and_store_all_activity_details()
+ │   └→ 见 §4.15.2
+ │
+ └─ Step 3 (可选, scan_new=True): discover_new_activities()
+     遍历 activity_id=[1..scan_range] 探测新活动
+     → 写入 master 表
+```
+
+> **注**：旧版 Step 2（`fetch_all_my_activities()` 写入 master 表）已移除。我的活动未结束数据（报名中+活动中+未开始）改为写入独立表 `second_class_user_activities`，由调度器通过 `fetch_and_store_my_unfinished_activities()` 拉取。
+
+#### `fetch_activities_can_apply()` 详情
+
+- **URL**: `POST https://2class.cqtbi.edu.cn/Student/Activity/getActivityCanApply.html`
+- **请求体**: `moduleID`, `typeID`, `keywords`, `sortByTime`, `sortByScore`
+- **响应格式支持**: 数组、`{rows: [...]}`、`{data: [...]}` 等
+- **字段提取**: 调用 `_parse_activity_entry()` 解析每个活动的 JSON 字段
+- **去重**: 返回已去重的活动列表（基于 `activity_id`）
+
+#### `fetch_all_my_activities()` 详情
+
+- **入口**: `GET https://2class.cqtbi.edu.cn/Student/My/myActivity.html`
+- **服务端渲染标签页**（直接解析 HTML 表格行）:
+  - `tab=1` 报名中 → `status_code=3`
+  - `tab=2` 活动中 → `status_code=5`
+  - `tab=5` 未开始 → `status_code=0`（语义：已报名但未开始，区别于 API 的"草稿"）
+- **AJAX 分页标签页**（POST 请求，`pageNo` 分页，最多 5 页）:
+  - `tab=3` 已结束 → `POST myActivity_End.html`
+  - `tab=4` 其它 → `POST myActivity_other.html`
+- **响应格式**: `[maxID, [activity1, activity2, ...]]`
+- **返回**: `{"报名中": [...], "活动中": [...], "已结束": [...], "其它": [...], "未开始": [...]}`
+
+#### `SecondClassMasterDB.upsert_activities()` 写入逻辑
+
+- 批量逐条执行 `INSERT ... ON CONFLICT(student_id, activity_id) DO UPDATE SET ...`
+- 更新字段：`activity_name`, `module_name`, `score`, `organizer`, `start_date`, `end_date`, `apply_start`, `apply_end`, `status_code`, `status_name`, `is_closed`, `fetched_at`
+- 使用线程锁 `self._lock` 保证并发安全
+- 日志输出 "活动总表已保存，共 N 条记录"
+
+---
+
+### 4.15.2 活动详情表（`second_class_activity_detail_v3`）录入逻辑与数据流
+
+`second_class_activity_detail_v3` 表存储每个活动的详细页面信息，来源于 `apply.html` 页面解析。
+
+#### 录入入口
+
+有 **3 个入口** 写入 v3 表：
+
+| 入口 | 函数 | 触发场景 | 数据量 |
+|------|------|----------|--------|
+| **A** | `fetch_and_save_activity_detail()` | QQ 指令 `#<活动ID>` 实时查询，缓存未命中时调用 | 单个活动 |
+| **B** | `fetch_and_store_all_activity_details()` | 调度器 `fetch_details=True` 时，或 `#更新` 指令 | 批量（unfetched + reparse） |
+| **C** | `discover_new_activities()` 间接 | 扫描新活动时，成功获取详情也写入 v3 表 | 单个活动 |
+
+#### 数据流向
+
+```
+入口 A (实时): fetch_and_save_activity_detail(sess, activity_id)
+ │ 被调用于: QQ 转发器 #<活动ID> 指令
+ │
+入口 B (批量): fetch_and_store_all_activity_details(sess, student_id, ...)
+ │ 被调用于: fetch_and_store_master_data() Step 3
+ │
+ ├─ 1. 获取待拉取列表
+ │   get_unfetched_activity_ids() → LEFT JOIN 查询 master 表有但 detail 表无的 activity_id
+ │   get_need_reparse_activity_ids() → 查询 category_name / implementation_method 为空的旧记录
+ │
+ ├─ 2. 逐个获取详情 (间隔 3 秒)
+ │   fetch_activity_detail_page(sess, activity_id)
+ │   │  GET /Student/Activity/apply.html?activityID=xxx
+ │   │  异常检测: "活动不存在" / "跳转提示" / "无权" / "404"
+ │   │
+ │   │  三层解析策略:
+ │   │   ├─ 策略 A: _parse_detail_by_adjacent_labels()
+ │   │   │   按文本行遍历，匹配 _LABEL_FIELD_MAP 标签名
+ │   │   │   提取: 类别, 实施方式, 概述, 主办方, 联系电话, 地点, 时长,
+ │   │   │         报名方式, 人数上限/当前, 限制学院/年级, 需签退/总结,
+ │   │   │         主办方需总结, 取消时限, 定位签到, 附件, 主图,
+ │   │   │         报名时间, 活动时间
+ │   │   │
+ │   │   ├─ 策略 B: _fallback_regex_parse()
+ │   │   │   策略 A 失败时的正则回退，提取关键字段
+ │   │   │
+ │   │   └─ 策略 C: BeautifulSoup 结构提取
+ │   │       主图、状态、<ul.mui-table-view> 列表项
+ │   │
+ │   └─ 校验: activity_name 为空 → log.error + 删除无效 detail 记录
+ │
+ └─ 3. 保存到 DB
+     detail_db.upsert(activity_id=xxx, activity_name=xxx, ...)
+     → INSERT ... ON CONFLICT(activity_id) DO UPDATE SET ...
+```
+
+#### `_LABEL_FIELD_MAP` 标签→字段映射
+
+`_LABEL_FIELD_MAP`（第 1901-1925 行）定义了 22 个标签名与 DB 字段的对应关系：
+
+| 标签（HTML 文本） | DB 字段 | 说明 |
+|-------------------|---------|------|
+| 类别 | `category_name` | 活动类别名称 |
+| 实施内容与方式 / 实施内容与目标 | `implementation_method` | 实施方式 |
+| 实施内容与方式： / 活动实施内容与方式： | `implementation_method` | 含冒号的变体 |
+| 概述 | `overview` | 活动概述文本 |
+| 主办方 | `organizer` | 主办方名称 |
+| 联系电话 | `contact_phone` | 联系电话 |
+| 活动地点 | `location` | 地点 |
+| 发放时长 / 时长 | `duration` | 时长描述 |
+| 报名方式 | `signup_method` | 报名方式 |
+| 人数上限 | `max_participants` | 人数上限 |
+| 当前人数 | `current_participants` | 当前已报名人数 |
+| 限制学院 | `limit_college` | 学院限制 |
+| 限制年级 | `limit_grade` | 年级限制 |
+| 需签退 | `need_sign_out` | 是否需要签退 |
+| 需总结 / 需要提交总结/心得 | `need_summary` | 是否需要提交总结 |
+| 主办方需总结 | `organizer_need_summary` | 主办方是否需要总结 |
+| 取消时限 | `cancel_time_limit` | 取消报名时限 |
+| 定位签到 | `location_sign` | 是否需要定位签到 |
+| 附件 | `attachment` | 附件信息 |
+| 主图 | `main_image` | 主图文件名 |
+| 报名时间 | `apply_time` | 报名时间范围 |
+| 活动时间 | `activity_time` | 活动时间范围 |
+
+#### 关键辅助方法
+
+| 方法 | 说明 |
+|------|------|
+| `get_unfetched_activity_ids()` | `LEFT JOIN` 查询 master_v2 中有但 detail_v3 中无的 `activity_id` |
+| `get_need_reparse_activity_ids()` | 查询 `category_name` 或 `implementation_method` 为空的旧版记录（需重新解析以获取更多字段） |
+| `get_by_activity_id(aid)` | 按 `activity_id` 查询单条详情 |
+| `delete_by_activity_id(aid)` | 删除单条详情（用于空活动名清理） |
+
+---
+
+### 4.15.3 数据流全景图
+
+```mermaid
+flowchart TB
+    subgraph External["二课系统 API"]
+        CAN_APPLY["POST getActivityCanApply.html<br/>可报名活动列表"]
+        MY_ACT["GET myActivity.html<br/>我的活动（未结束标签页）"]
+        DETAIL["GET apply.html?activityID=xxx<br/>活动详情页"]
+        SCAN["activity_id 范围探测<br/>新活动扫描"]
+    end
+
+    subgraph Fetch["数据拉取层"]
+        FMS["fetch_and_store_master_data()<br/>一站式入口"]
+        FCAN["fetch_activities_can_apply()"]
+        FUNFIN["fetch_and_store_my_unfinished_activities()<br/>未结束活动独立拉取"]
+        FDETAIL["fetch_and_store_all_activity_details()<br/>批量拉取详情"]
+        FSAD["fetch_and_save_activity_detail()<br/>单活动实时拉取"]
+        FDISCOVER["discover_new_activities()<br/>探测新活动"]
+        FDP["fetch_activity_detail_page()<br/>三层解析策略"]
+    end
+
+    subgraph Storage["存储层 users.db"]
+        MASTER["second_class_master_v2<br/>活动总表<br/>唯一键: (student_id, activity_id)"]
+        USER_ACT["second_class_user_activities<br/>用户未结束活动<br/>仅存 qq+学号+活动ID"]
+        DETAIL_DB["second_class_activity_detail_v3<br/>活动详情<br/>唯一键: activity_id"]
+    end
+
+    subgraph Consumer["消费层"]
+        SCHED["SecondClassScheduler<br/>定时调度器"]
+        QQ_CMD["QQ 转发器指令<br/>#二课列表 / #查看二课<br/>#<活动ID> / #二课图表"]
+        IMAGE["secondclass_activity_chart.py<br/>活动卡片/列表图渲染"]
+    end
+
+    External --> Fetch
+
+    FMS --> FCAN
+    FMS --> FDETAIL
+    FMS --> FDISCOVER
+
+    CAN_APPLY --> FCAN
+    MY_ACT --> FUNFIN
+    DETAIL --> FDETAIL
+    DETAIL --> FSAD
+    SCAN --> FDISCOVER
+
+    FDETAIL --> FDP
+    FSAD --> FDP
+
+    FCAN -->|"upsert_activities()"| MASTER
+    FUNFIN -->|"upsert_activities()"| USER_ACT
+    FDISCOVER -->|"upsert_activities()"| MASTER
+
+    FDP -->|"detail_db.upsert()"| DETAIL_DB
+
+    MASTER -->|"get_by_student_id()"| Consumer
+    DETAIL_DB -->|"get_by_activity_id()"| Consumer
+    DETAIL_DB -->|"get_unfetched_activity_ids()"| FDETAIL
+
+    SCHED -->|"定时触发"| FMS
+    SCHED -->|"定时触发"| FUNFIN
+    QQ_CMD -->|"按需触发"| FMS
+    QQ_CMD -->|"缓存未命中时"| FSAD
+    Consumer --> IMAGE
+```
+
+---
+
 ### 4.16 `secondclass/secondclass_scheduler.py` — 二课调度器
 
-自动定时拉取所有已配置用户的二课活动总表，支持增量更新。
+自动定时拉取所有已配置用户的二课活动总表和详情，支持增量更新。
 
 **调度逻辑**：
-1. 读取 accounts.json + users.db 获取所有用户凭证
-2. 遍历每个用户，获取 SSID 会话
-3. 调用 `fetch_and_store_master_data()` 拉取活动列表+详情
-4. 按调度间隔重复
+
+1. 读取 accounts.json + users.db 获取所有用户凭证（同 student_id 去重，accounts.json 覆盖 users 表）
+2. 遍历每个用户，调用 `obtain_secondclass_session_from_user()` 获取 SSID 会话
+3. 调用 `fetch_and_store_master_data(sess, student_id, qq, fetch_details=True, max_detail_activities=10, include_reparse=True, scan_new=True, scan_range=50)` 一站式拉取：
+   - 可报名活动列表（写入 master 表）
+   - 活动详情（批量拉取 unfetched + reparse 记录，写入 detail 表）
+   - 新活动探测（扫描 activity_id 范围）
+4. 调用 `fetch_and_store_my_unfinished_activities(sess, student_id, qq)` 拉取用户未结束活动（报名中+活动中+未开始），写入独立表
+5. 按调度间隔重复
 
 **调度策略**：
 
@@ -548,6 +780,8 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 | 周三 06:00-17:00 | 15 分钟 |
 | 周二至周三其余时间 | 30 分钟 |
 | 其它日子 | 3 小时 |
+
+**详情拉取限制**：`max_detail_activities=10` 限制每次调度最多拉取 10 个活动详情，避免单次请求过多触发反爬。`include_reparse=True` 时同时补充旧版解析不完整的记录。
 
 ### 4.17 `secondclass/secondclass_tool_gui.py` — 二课调度 GUI
 
@@ -733,6 +967,7 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 | `#二课图表` | 已绑定 | ✅ | ✅ | 从 DB 缓存读取数据，渲染信息图表 |
 | `#二课列表` | 已绑定 | ✅ | ✅ | 渲染活动分页列表图（每图最多10个） |
 | `#查看二课` | 已绑定 | ❌ | ✅ | 渲染全部活动的详情卡片并逐张发送 |
+| `#我的二课` | 已绑定 | ✅ | ✅ | 查询用户未结束活动（报名中/活动中/未开始），渲染卡片合并转发 |
 | `#报名 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动报名，交互流程：自动获取验证码 → 用户输入 → 提交报名 |
 | `#<活动ID>` | 已绑定 | ✅ | ✅ | 查询二课活动详情（从 DB 渲染卡片图片） |
 | `#查询用户` | 管理员 | ✅ | ✅ | 读取 `accounts.json` → 导出用户信息 Excel 并合并转发 |
@@ -746,7 +981,7 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 | 基本指令 | `#帮助`, `#扫码登录`, `#登录`, `#取消` |
 | 课表相关 | `#更新课表`, `#本周课表`, `#今日课表`, `#明天课表`, `#第N周课表`, `#导出课表`, `#更新模板课表` |
 | 凭证与更新 | `#更新`, `#密码更新` |
-| 第二课堂 | `#二课信息`, `#二课图表`, `#二课列表`, `#查看二课`, `#报名 <活动ID>` |
+| 第二课堂 | `#二课信息`, `#二课图表`, `#二课列表`, `#查看二课`, `#我的二课`, `#报名 <活动ID>` |
 | 管理员指令 | `#更新调试`, `#查询用户` |
 
 ### 5.4 工作流详解
@@ -811,6 +1046,7 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 | `#二课信息` | 实时二课 API | `secondclass_image.py` 信息图 | 文字摘要 + 9:16 PNG |
 | `#二课图表` | DB 缓存 (`second_class_v2`) | `secondclass_image.py` 信息图 | 9:16 PNG |
 | `#二课列表` | DB 缓存 (`second_class_master_v2`) | `secondclass_activity_chart.py` 分页列表 | 多张列表图，合并转发 |
+| `#我的二课` | DB 缓存 (`second_class_user_activities` + `second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 单卡片 | 多张卡片图，合并转发 |
 | `#查看二课` | DB 缓存 (`second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 活动卡片 | 逐张卡片图片 |
 | `#<活动ID>` | DB 缓存 (`second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 单卡片 | 单张卡片图片 |
 
@@ -861,7 +1097,7 @@ stateDiagram-v2
 
 ### 6.1 数据库文件
 
-`users.db` — SQLite 数据库，包含 5 张表。
+`users.db` — SQLite 数据库，包含 6 张表。
 
 ### 6.2 `users` 表 — QQ ↔ SSO 账号绑定
 
@@ -962,7 +1198,25 @@ stateDiagram-v2
 | `is_closed` | TEXT | `'0'` | 是否关闭 |
 | `fetched_at` | TEXT | `''` | 抓取时间 |
 
-### 6.6 `second_class_activity_detail_v3` 表 — 活动详情
+### 6.6 `second_class_user_activities` 表 — 用户未结束活动
+
+> 唯一索引: `(student_id, activity_id)` | 索引: `(qq)`
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `id` | INTEGER PK AUTO | — | 自增主键 |
+| `qq` | INTEGER | `0` | QQ 号 |
+| `student_id` | TEXT NOT NULL | — | 学号 |
+| `activity_id` | TEXT NOT NULL | — | 活动 ID |
+| `fetched_at` | TEXT | `''` | 抓取时间 |
+| `can_apply` | TEXT | `''` | 待报名标记（预留字段） |
+
+**用途**：仅记录用户"未结束"活动（报名中+活动中+未开始），用于快速查询用户参与的未结束活动列表。通过调度器 `fetch_and_store_my_unfinished_activities()` 定时更新。
+
+**数据流来源**：
+- `GET /Student/My/myActivity.html` → 解析 tabs 1+2+5 的 `activity_id` → 清空旧记录 → 写入新数据
+
+### 6.7 `second_class_activity_detail_v3` 表 — 活动详情
 
 > 唯一索引: `(activity_id)` | 索引: `(fetched_at)`
 
@@ -1346,11 +1600,15 @@ sequenceDiagram
 - **`报名未开始`**：从页面 `span.mui-btn-danger` / `span.btn.red` / `span.baom` 元素提取的文本，不通过 `status_code` 编码
 - **`报名中`** / **`已结束`** / **`已报名`**：同源提取
 
-代码中通过以下逻辑判断报名未开始（第 2745 行）：
+代码中通过以下逻辑统计报名未开始的活动（`discover_new_activities()` 第 2748 行）：
 ```python
-if "未开始" in status or "报名" not in status:
-    # 视为"报名未开始"，跳过自动扫描
+status = detail.get("status_name", "")
+if "未开始" in status:
+    upcoming += 1
 ```
+
+> **注意**：旧版本中此处会 `continue` 跳过"未开始"活动，导致其无法录入 detail 表。
+> 当前版本已修复，**仅计数不跳过**，所有活动（含"报名未开始"、"活动未开始"）均正常录入。
 
 #### 9.4.4 其他派生状态
 
@@ -1449,6 +1707,8 @@ if "未开始" in status or "报名" not in status:
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.6 | 2026-06-07 | 新增 `second_class_user_activities` 表（仅存 qq/student_id/activity_id），记录用户未结束活动（报名中+活动中+未开始）；新增 `SecondClassUserActivityDB` 类与 `fetch_and_store_my_unfinished_activities()` 函数；`fetch_and_store_master_data()` 移除 Step2（我的活动不再写入 master 表），改为调度器中独立拉取新表；更新数据流全景图与 DB 表结构文档 |
+| v1.5 | 2026-06-07 | 新增 §4.15.1 活动总表（`second_class_master_v2`）录入逻辑与数据流文档（含 `fetch_and_store_master_data()` 四步流程、`fetch_activities_can_apply()`、`fetch_all_my_activities()` 详解、`upsert_activities()` 写入逻辑）；新增 §4.15.2 活动详情表（`second_class_activity_detail_v3`）录入逻辑与数据流文档（含三层解析策略、`_LABEL_FIELD_MAP` 标签→字段映射表、3 个写入入口）；新增 §4.15.3 数据流全景图（mermaid 流程图）；更新 §4.16 调度器文档，补充详情拉取参数和限制说明 |
 | v1.4 | 2026-06-05 | 新增 `schedule/jwgl_client.py` JWGL 教务系统客户端（从 schedule_tool 重构提取，新增成绩查询 `get_grades()`）；新增 `secondclass_auto_score.py` 二课自动积分工具（status/signup/probe/summary/monitor/run 6大子命令，含 ddddocr 验证码识别）；新增 `sso_to_ssid.py` SSID 转换工具及 `convert_to_ssid()` 函数；新增凭证转换链文档 §7.5（含转换流程图、存储位置表、函数映射表、凭证层级图）；新增成绩查询 API 文档（`cqtbi-api.md` §3.3）；新增二课自动积分 API 文档（`DEVELOPER.md` §9.6）；更新 4.1 核心功能表和模块编号 |
 | v1.2 | 2026-06-05 | 新增 `secondclass/secondclass_activity_chart.py` 活动卡片/列表渲染模块；`SecondClassMasterDB` 新增 `delete_by_activity_id()`、`get_by_student_id()`；`SecondClassActivityDetailDB` 新增 `delete_by_activity_id()`；`fetch_and_store_all_activity_details()` 增加空活动名检测+记录删除；新增 #二课列表、#查看二课 指令；修复 DEVELOPER.md 中 v2→v3 表名 |
 | v1.1 | 2026-06-04 | 新增 `second_class_activity_detail_v3` 活动详情表；新增 `SecondClassActivityDetailDB`、`fetch_activity_detail_page()`、`fetch_and_store_all_activity_details()`；调度器自动拉取活动详情；新增 `secondclass_image.py` 二课信息图渲染；新增 #二课图表 指令 |

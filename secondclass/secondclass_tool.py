@@ -429,6 +429,143 @@ class SecondClassMasterDB:
             return dict(row) if row else None
 
 
+# ════════════════════ 用户未结束活动 DB ════════════════════
+
+
+class SecondClassUserActivityDB:
+    """users.db 中 second_class_user_activities 表的操作。
+    存储用户的"未结束"活动（报名中+活动中+未开始=标签页1+2+5），
+    仅记录 qq、学号、活动ID，用于快速查询用户参与的未结束活动。
+    """
+
+    def __init__(self, db_path: Path = USER_DB_FILE) -> None:
+        self._path = db_path
+        self._lock = threading.Lock()
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self._path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    def _init_db(self) -> None:
+        with self._lock:
+            conn = self._connect()
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS second_class_user_activities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    qq INTEGER DEFAULT 0,
+                    student_id TEXT NOT NULL,
+                    activity_id TEXT NOT NULL,
+                    fetched_at TEXT DEFAULT '',
+                    can_apply TEXT DEFAULT ''
+                )
+            """)
+            # 兼容旧表：如果 can_apply 列不存在则添加
+            try:
+                conn.execute("ALTER TABLE second_class_user_activities ADD COLUMN can_apply TEXT DEFAULT ''")
+            except Exception:
+                pass
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_user_act_sid_aid
+                ON second_class_user_activities(student_id, activity_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_act_qq
+                ON second_class_user_activities(qq)
+            """)
+            conn.commit()
+            conn.close()
+
+    def upsert_activities(
+        self, student_id: str, activity_ids: list[str], qq: int = 0
+    ) -> int:
+        """批量插入活动ID（按 student_id+activity_id 去重）。"""
+        if not activity_ids or not student_id:
+            return 0
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        count = 0
+        with self._lock:
+            conn = self._connect()
+            for aid in activity_ids:
+                if not aid:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO second_class_user_activities
+                        (qq, student_id, activity_id, fetched_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(student_id, activity_id) DO UPDATE SET
+                        qq=excluded.qq,
+                        fetched_at=excluded.fetched_at
+                    """,
+                    (qq, student_id, aid, now_iso),
+                )
+                count += 1
+            conn.commit()
+            conn.close()
+        return count
+
+    def get_by_student_id(self, student_id: str) -> list[dict]:
+        """按学号查询所有未结束活动。"""
+        if not student_id:
+            return []
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT * FROM second_class_user_activities WHERE student_id=? "
+                "ORDER BY fetched_at DESC",
+                (student_id,),
+            ).fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+
+    def get_activity_ids_by_student_id(self, student_id: str) -> list[str]:
+        """按学号查所有未结束活动的 activity_id 列表。"""
+        if not student_id:
+            return []
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT activity_id FROM second_class_user_activities "
+                "WHERE student_id=?",
+                (student_id,),
+            ).fetchall()
+            conn.close()
+            return [r["activity_id"] for r in rows]
+
+    def delete_by_activity_id(self, activity_id: str) -> bool:
+        """按 activity_id 删除记录。"""
+        if not activity_id:
+            return False
+        with self._lock:
+            conn = self._connect()
+            cur = conn.execute(
+                "DELETE FROM second_class_user_activities WHERE activity_id=?",
+                (activity_id,),
+            )
+            deleted = cur.rowcount > 0
+            conn.commit()
+            conn.close()
+            return deleted
+
+    def clear_by_student_id(self, student_id: str) -> int:
+        """清空指定学生的所有记录。"""
+        if not student_id:
+            return 0
+        with self._lock:
+            conn = self._connect()
+            cur = conn.execute(
+                "DELETE FROM second_class_user_activities WHERE student_id=?",
+                (student_id,),
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            conn.close()
+            return deleted
+
+
 # ════════════════════ 活动详情 DB（v3）════════════════════
 
 
@@ -2422,6 +2559,52 @@ def fetch_all_my_activities(sess: requests.Session) -> dict[str, list[dict]]:
     return result
 
 
+def fetch_and_store_my_unfinished_activities(
+    sess: requests.Session,
+    student_id: str,
+    qq: int = 0,
+) -> dict:
+    """拉取"我的活动"未结束标签页（报名中+活动中+未开始）并存储到独立表。
+
+    仅提取 activity_id，不写入 master 表。
+
+    返回: {"tab1_count": N, "tab2_count": N, "tab5_count": N, "total": N}
+    """
+    # 1. 获取 myActivity.html 页面
+    r = sess.get(f"{BASE_URL}/Student/My/myActivity.html", timeout=15)
+    if "top.location.href" in r.text or r.status_code in (301, 302, 303, 307):
+        raise SecondClassAuthError("二课登录已过期，请重新 #扫码登录")
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # 2. 解析 tabs 1,2,5 的 activity_id
+    all_ids: list[str] = []
+    tab_counts: dict[str, int] = {}
+    for tab_id in ("1", "2", "5"):
+        tab_activities = _parse_my_activity_tab_html(soup, tab_id)
+        ids = [a["activity_id"] for a in tab_activities if a.get("activity_id")]
+        all_ids.extend(ids)
+        tab_name = MY_ACTIVITY_TABS[tab_id]
+        tab_counts[f"tab{tab_id}_{tab_name}"] = len(ids)
+        log.info("二课未结束活动[%s]: %d 个", tab_name, len(ids))
+
+    if not student_id:
+        log.warning("fetch_and_store_my_unfinished_activities: student_id 为空")
+        return {**tab_counts, "total": 0}
+
+    # 3. 写入新表（先清空旧记录，再写入新数据）
+    db = SecondClassUserActivityDB()
+    db.clear_by_student_id(student_id)
+    if all_ids:
+        saved = db.upsert_activities(student_id, list(set(all_ids)), qq=qq)
+        log.info("二课未结束活动已存储: student_id=%s qq=%d count=%d", student_id, qq, saved)
+    else:
+        log.info("二课未结束活动为空: student_id=%s", student_id)
+
+    stats = {**tab_counts, "total": len(all_ids)}
+    return stats
+
+
 def _parse_my_activity_tab_html(soup: BeautifulSoup, tab_id: str) -> list[dict]:
     """从 myActivity.html 中解析服务端渲染的标签页活动列表。
 
@@ -2804,24 +2987,10 @@ def fetch_and_store_master_data(
         log.warning("二课总表: student_id=%s 可报名拉取失败: %s", student_id, e)
         stats["can_apply"] = 0
 
-    # 2. 拉取我的活动（所有标签页）
-    try:
-        my_activities = fetch_all_my_activities(sess)
-        tab_counts = {}
-        total_my = 0
-        for tab_name, acts in my_activities.items():
-            cnt = master_db.upsert_activities(student_id, acts, qq=qq)
-            tab_counts[tab_name] = cnt
-            total_my += cnt
-        stats["my_activities"] = tab_counts
-        stats["my_total"] = total_my
-        log.info("二课总表: student_id=%s 我的活动 %d 个", student_id, total_my)
-    except Exception as e:
-        log.warning("二课总表: student_id=%s 我的活动拉取失败: %s", student_id, e)
-        stats["my_activities"] = {}
-        stats["my_total"] = 0
+    # (Step 2 已移除：我的活动不再写入 master 表，改用独立表 second_class_user_activities)
+    stats["my_total"] = 0
 
-    stats["total_count"] = stats.get("can_apply", 0) + stats.get("my_total", 0)
+    stats["total_count"] = stats.get("can_apply", 0)
 
     # 3. 可选：拉取活动详情
     if fetch_details:
@@ -3047,7 +3216,12 @@ def fetch_apply_page(sess: requests.Session, activity_id: str) -> dict:
         raise ActivityApplyError(f"活动页面返回 {r.status_code}")
 
     # 检查是否被重定向到登录页
-    if "login" in r.url.lower() or "ssid" not in [c.name for c in sess.cookies]:
+    cookie_names = {c.name for c in sess.cookies}
+    if "login" in r.url.lower() or "SSID" not in cookie_names:
+        log.warning(
+            "fetch_apply_page 疑似登录失效: url=%s cookies=%s status=%s",
+            r.url, sorted(cookie_names), r.status_code,
+        )
         raise SecondClassAuthError("二课登录已过期，请重新 #扫码登录")
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -3062,23 +3236,44 @@ def fetch_apply_page(sess: requests.Session, activity_id: str) -> dict:
         if title_tag:
             activity_name = title_tag.get_text(strip=True)
 
-    # 检测当前状态：已报名/报名未开始/报名已结束
+    # 检测当前状态：优先从 span.mui-btn-danger > div.btn 取状态文本
     status_name = ""
     status_el = soup.select_one(
-        "span.mui-btn-danger, span.btn.red, span.baom, span.mui-btn"
+        "span.mui-btn-danger div.btn, span.btn.red, span.baom, "
+        "span.mui-btn div.btn, span.mui-btn-danger"
     )
     if status_el:
         status_name = status_el.get_text(strip=True)
 
-    # 如果存在"已报名"状态提示，直接拒绝
     page_text = soup.get_text(separator="\n", strip=True)
-    if "已报名" in page_text or "你已经报名" in page_text:
-        raise ActivityApplyError(f"你已经报名了该活动「{activity_name}」")
-    if "报名未开始" in page_text:
+
+    # 1) 已报名：apply.html 在已报名状态下会展示 ok2.png 作为成功标识
+    already_applied = bool(
+        soup.select_one("img[src*='ok2.png'], img[src*='ok2']")
+    ) or "你已经报名" in page_text or "已经报名" in page_text
+    if already_applied:
+        raise ActivityApplyError(f"你已经报名活动「{activity_name}」")
+
+    # 2) 报名未开始
+    if "报名未开始" in page_text or status_name in ("报名未开始", "未开始"):
         raise ActivityApplyError(f"活动「{activity_name}」报名未开始")
-    if "报名已结束" in page_text or "报名截止" in page_text:
-        raise ActivityApplyError(f"活动「{activity_name}」报名已结束")
-    if "人数已满" in page_text:
+
+    # 3) 报名已结束 / 已截止 / 活动已结束
+    if (
+        "报名已结束" in page_text
+        or "报名截止" in page_text
+        or "报名已截止" in page_text
+        or status_name in ("已结束", "已截止", "报名结束", "报名已截止", "报名已结束")
+    ):
+        raise ActivityApplyError(f"活动「{activity_name}」报名已截止")
+
+    # 4) 人数已满
+    if (
+        "人数已满" in page_text
+        or "报名已满" in page_text
+        or "名额已满" in page_text
+        or status_name in ("已满", "人数已满", "报名已满")
+    ):
         raise ActivityApplyError(f"活动「{activity_name}」报名人数已满")
 
     # 提取隐藏字段 s1, s2（在 apply.html 的 <form> 中）
