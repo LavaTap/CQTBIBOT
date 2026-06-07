@@ -1,0 +1,224 @@
+{
+  "semester": "2025-2026-2",
+  "student_id": "2404281",
+  "student_name": "",
+  "fetched_at": "2026-06-04T15:14:47",
+  "courses": [
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "蒋友强",
+      "room": "修德楼C202",
+      "weeks": "3-5,7-8,11-14,16",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "网络安全设备配置与管理",
+      "teacher": "李敏",
+      "room": "A217网络安全实训室",
+      "weeks": "13",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "渗透测试",
+      "teacher": "张曼",
+      "room": "A217网络安全实训室",
+      "weeks": "2,4-14",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "网络渗透与防护",
+      "teacher": "冯昊",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "16-18",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "网络安全设备配置与管理",
+      "teacher": "李敏",
+      "room": "A217网络安全实训室",
+      "weeks": "2-6,8-12",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊,黄海鸿",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "13-14",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "15-18",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "网络渗透与防护",
+      "teacher": "冯昊",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "2-3,6,8,10-15,17-18",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "网络渗透与防护",
+      "teacher": "冯昊",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "4-5",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊",
+      "room": "A211中小企业信息化实训室",
+      "weeks": "10",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊",
+      "room": "A102移动互联实训室",
+      "weeks": "7",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "形势与政策4",
+      "teacher": "黄俊武",
+      "room": "励志楼D302",
+      "weeks": "2-5",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "入侵检测与防护",
+      "teacher": "陈宇",
+      "room": "A209云计算开放实训室",
+      "weeks": "17",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "体育(4)",
+      "teacher": "陈民昊",
+      "room": "合川运动场",
+      "weeks": "2-6,8",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "体育(4)",
+      "teacher": "陈民昊",
+      "room": "合川运动场",
+      "weeks": "13",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "体育(4)",
+      "teacher": "陈民昊",
+      "room": "合川运动场",
+      "weeks": "14",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "入侵检测与防护",
+      "teacher": "陈宇",
+      "room": "A512教学云平台应用实训室",
+      "weeks": "2-7,15-16",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "入侵检测与防护",
+      "teacher": "陈宇",
+      "room": "A515综合布线实训室",
+      "weeks": "8-9,11-14",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "渗透测试",
+      "teacher": "张曼",
+      "room": "A217网络安全实训室",
+      "weeks": "13-18",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "蒋友强",
+      "room": "励志楼D310",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "网络渗透与防护",
+      "teacher": "冯昊",
+      "room": "A210云计算平台运维与开发实训室",
+      "weeks": "10",
+      "day": 6,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊",
+      "room": "A209云计算开放实训室",
+      "weeks": "2-4",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "无线网络安全与管理",
+      "teacher": "冯昊",
+      "room": "A211中小企业信息化实训室",
+      "weeks": "5-6,8,10-15,17-18",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "体育(4) 陈民昊 2-6,8,13-14周;",
+      "teacher": "",
+      "room": "",
+      "weeks": "",
+      "day": 1,
+      "period_start": 0,
+      "period_end": 0
+    }
+  ]
+}

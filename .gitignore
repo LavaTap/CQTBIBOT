@@ -1,0 +1,12 @@
+NapCat.Shell.Windows.OneKey/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+.codebuddy/
+_temp/
+*.db
+*.db-shm
+*.db-wal
+accounts.json

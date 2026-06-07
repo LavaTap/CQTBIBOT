@@ -1,0 +1,395 @@
+{
+  "semester": "2025-2026-2",
+  "student_id": "2405134",
+  "student_name": "",
+  "fetched_at": "2026-06-07T17:17:11",
+  "courses": [
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "2-4",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "CAD/CAE/CAM实训",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "2-4",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "6-9,11-12",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "智能座舱系统装调与测试",
+      "teacher": "邓洪洲",
+      "room": "【行知楼】",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "17",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "体育(4)",
+      "teacher": "马婷",
+      "room": "【运动场】",
+      "weeks": "12-16",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "汽车零部件逆向设计与3D打印",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "1-5",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "汽车零部件逆向设计与3D打印",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "6,8-11",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "高级驾驶辅助系统装调与测试",
+      "teacher": "张浩",
+      "room": "【行知楼】",
+      "weeks": "12",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "智能座舱系统装调与测试",
+      "teacher": "邓洪洲",
+      "room": "【行知楼】",
+      "weeks": "13-16",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "智能座舱系统装调与测试",
+      "teacher": "邓洪洲",
+      "room": "【行知楼】",
+      "weeks": "17-18",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "1-3",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔,余平安",
+      "room": "【行知楼】",
+      "weeks": "4",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔,皮江涛",
+      "room": "【行知楼】",
+      "weeks": "5",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,余平安",
+      "room": "【行知楼】",
+      "weeks": "10",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,皮江涛",
+      "room": "【行知楼】",
+      "weeks": "13",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,唐鑫印",
+      "room": "【行知楼】",
+      "weeks": "14-15,17",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "智能新能源汽车检测实训",
+      "teacher": "张甲瑞",
+      "room": "【行知楼】",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔,余平安",
+      "room": "【行知楼】",
+      "weeks": "6",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车零部件曲面结构设计",
+      "teacher": "李海翔,皮江涛",
+      "room": "【行知楼】",
+      "weeks": "7",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,余平安",
+      "room": "【行知楼】",
+      "weeks": "8,18",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,皮江涛",
+      "room": "【行知楼】",
+      "weeks": "11",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车塑料零部件设计",
+      "teacher": "李海翔,唐鑫印",
+      "room": "【行知楼】",
+      "weeks": "12",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车试验技术",
+      "teacher": "陈刚,杨东峰",
+      "room": "【行知楼】",
+      "weeks": "6-8",
+      "day": 7,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车试验技术",
+      "teacher": "陈刚,杨东峰",
+      "room": "【行知楼】",
+      "weeks": "10-12",
+      "day": 7,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "汽车试验技术",
+      "teacher": "陈刚,杨东峰",
+      "room": "【行知楼】",
+      "weeks": "13",
+      "day": 7,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "高级驾驶辅助系统装调与测试",
+      "teacher": "张浩",
+      "room": "【行知楼】",
+      "weeks": "7-9,11-15",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "高级驾驶辅助系统装调与测试",
+      "teacher": "张浩",
+      "room": "【行知楼】",
+      "weeks": "16-18",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "形势与政策4",
+      "teacher": "刘娅茜",
+      "room": "【D幢(励志楼)】",
+      "weeks": "5-8",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "9,11-12",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "CAD/CAE/CAM实训",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "2-4,6-9,11-15",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "CAD/CAE/CAM实训",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "16-18",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "底盘线控系统装调与测试",
+      "teacher": "陈刚",
+      "room": "【行知楼】",
+      "weeks": "1-4,6",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "智能新能源汽车检测实训",
+      "teacher": "张甲瑞",
+      "room": "【行知楼】",
+      "weeks": "9-18",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "智能新能源汽车检测实训",
+      "teacher": "张甲瑞",
+      "room": "【行知楼】",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "蒋承凯",
+      "room": "【C幢(修德楼)】",
+      "weeks": "4-5,7-9,11-13",
+      "day": 1,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "高级驾驶辅助系统装调与测试",
+      "teacher": "张浩",
+      "room": "【行知楼】",
+      "weeks": "2,4-6,10",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "汽车零部件逆向设计与3D打印",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "5",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "蒋承凯",
+      "room": "【C幢(修德楼)】",
+      "weeks": "4-5,7-9,11-13",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "汽车零部件逆向设计与3D打印",
+      "teacher": "李海翔",
+      "room": "【行知楼】",
+      "weeks": "5",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "体育(4) 马婷 12-16周;CAD/CAE/CAM实训 陈刚 2-4,6-9,11-18周;汽车塑料零部件设计 李海翔,皮江涛 11周;汽车塑料零部件设计 李海翔,余平安 8,18周;汽车塑料零部件设计 李海翔,唐鑫印 12,14-15,17周;“匠星成长”实践课程4  1-20周;智能新能源汽车检测实训 张甲瑞 9-18周;",
+      "teacher": "",
+      "room": "",
+      "weeks": "",
+      "day": 1,
+      "period_start": 0,
+      "period_end": 0
+    }
+  ]
+}

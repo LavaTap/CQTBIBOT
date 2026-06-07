@@ -1,0 +1,12 @@
+{
+  "ws_url": "ws://127.0.0.1:3001",
+  "access_token": "n8mSTQs2C2lPPP.J",
+  "source_groups": [
+    264092896
+  ],
+  "target_groups": [
+    307548801
+  ],
+  "admin_qq": 3200418862,
+  "command_enabled": true
+}
