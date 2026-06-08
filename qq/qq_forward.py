@@ -27,6 +27,8 @@ import sys
 import threading
 import time
 import tkinter as tk
+from datetime import datetime
+from pathlib import Path
 from tkinter import messagebox, ttk
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -2602,17 +2604,23 @@ class QQForwarder:
             threading.Event().wait(5)
 
 
+# ---------- 常量 ----------
+NAPCAT_SHELL_DIR = Path(__file__).resolve().parent.parent / "NapCat.Shell.Windows.OneKey" / "NapCat.44498.Shell"
+NAPCAT_QRCODE = NAPCAT_SHELL_DIR / "versions" / "9.9.26-44498" / "resources" / "app" / "napcat" / "cache" / "qrcode.png"
+
+
 # ---------- GUI ----------
 class ForwardApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("QQ 消息转发工具")
-        self.geometry("640x560")
+        self.geometry("640x600")
         self.resizable(True, True)
 
         self.config = ForwardConfig.load()
         self.forwarder: QQForwarder | None = None
         self._busy = False
+        self._napcat_monitor = None
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -2620,9 +2628,17 @@ class ForwardApp(tk.Tk):
     def _build_ui(self) -> None:
         pad = {"padx": 8, "pady": 4}
 
+        # --- Notebook ---
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, **pad)
+
+        # ============ Tab 1: QQ 转发 ============
+        fwd_frame = ttk.Frame(self.notebook)
+        self.notebook.add(fwd_frame, text="QQ 转发")
+
         # --- 配置区 ---
-        cfg_frame = ttk.LabelFrame(self, text="连接配置")
-        cfg_frame.pack(fill="x", **pad)
+        cfg_frame = ttk.LabelFrame(fwd_frame, text="连接配置")
+        cfg_frame.pack(fill="x", padx=4, pady=(4, 2))
 
         row0 = ttk.Frame(cfg_frame)
         row0.pack(fill="x", padx=6, pady=4)
@@ -2636,11 +2652,10 @@ class ForwardApp(tk.Tk):
         self.token_var = tk.StringVar(value=self.config.access_token)
         ttk.Entry(row_token, textvariable=self.token_var, width=30).pack(side="left", padx=4)
 
-        # --- 源群 / 目标群 多行列表 ---
+        # --- 源群 / 目标群 ---
         glist_frame = ttk.Frame(cfg_frame)
         glist_frame.pack(fill="x", padx=6, pady=4)
 
-        # 源群列
         src_frame = ttk.LabelFrame(glist_frame, text="源群列表（每行一个群号）")
         src_frame.pack(side="left", fill="both", expand=True, padx=(0, 4))
         self.src_text = tk.Text(src_frame, height=4, width=18, font=("Consolas", 9))
@@ -2650,7 +2665,6 @@ class ForwardApp(tk.Tk):
         self.src_text.configure(yscrollcommand=src_scroll.set)
         src_scroll.pack(side="right", fill="y", pady=4)
 
-        # 目标群列
         tgt_frame = ttk.LabelFrame(glist_frame, text="目标群列表（每行一个群号）")
         tgt_frame.pack(side="left", fill="both", expand=True, padx=(4, 0))
         self.tgt_text = tk.Text(tgt_frame, height=4, width=18, font=("Consolas", 9))
@@ -2662,9 +2676,9 @@ class ForwardApp(tk.Tk):
 
         ttk.Button(cfg_frame, text="保存配置", command=self._save_config).pack(pady=4)
 
-        # --- 指令系统配置 ---
-        cmd_frame = ttk.LabelFrame(self, text="#指令系统")
-        cmd_frame.pack(fill="x", **pad)
+        # --- 指令系统 ---
+        cmd_frame = ttk.LabelFrame(fwd_frame, text="#指令系统")
+        cmd_frame.pack(fill="x", padx=4, pady=2)
 
         row_admin = ttk.Frame(cmd_frame)
         row_admin.pack(fill="x", padx=6, pady=4)
@@ -2684,27 +2698,19 @@ class ForwardApp(tk.Tk):
         ).pack(fill="x", padx=10, pady=2)
 
         # --- 控制区 ---
-        ctrl_frame = ttk.Frame(self)
-        ctrl_frame.pack(fill="x", padx=8, pady=2)
-        self.start_btn = ttk.Button(ctrl_frame, text="启动监控", command=self._start_monitor)
-        self.start_btn.pack(side="left", padx=4)
-        self.stop_btn = ttk.Button(ctrl_frame, text="停止监控", command=self._stop_monitor, state="disabled")
-        self.stop_btn.pack(side="left", padx=4)
+        ctrl_frame = ttk.Frame(fwd_frame)
+        ctrl_frame.pack(fill="x", padx=4, pady=2)
+        self.fwd_start_btn = ttk.Button(ctrl_frame, text="启动监控", command=self._start_monitor)
+        self.fwd_start_btn.pack(side="left", padx=4)
+        self.fwd_stop_btn = ttk.Button(ctrl_frame, text="停止监控", command=self._stop_monitor, state="disabled")
+        self.fwd_stop_btn.pack(side="left", padx=4)
 
-        self.status_var = tk.StringVar(value="就绪 — 请先启动 NapCat 并配置连接")
-        ttk.Label(ctrl_frame, textvariable=self.status_var, foreground="#0a0").pack(side="right", padx=4)
-
-        # --- 提示 ---
-        tip = ttk.Label(
-            self,
-            text="提示：需先启动 NapCatQQ 并配置正向 WebSocket。点击停止即可断开连接。",
-            foreground="#888",
-        )
-        tip.pack(fill="x", padx=14, pady=2)
+        self.fwd_status_var = tk.StringVar(value="就绪")
+        ttk.Label(ctrl_frame, textvariable=self.fwd_status_var, foreground="#0a0").pack(side="right", padx=4)
 
         # --- 日志区 ---
-        log_frame = ttk.LabelFrame(self, text="运行日志")
-        log_frame.pack(fill="both", expand=True, **pad)
+        log_frame = ttk.LabelFrame(fwd_frame, text="运行日志")
+        log_frame.pack(fill="both", expand=True, padx=4, pady=(2, 4))
 
         self.log_text = tk.Text(log_frame, wrap="word", state="disabled", font=("Consolas", 9))
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
@@ -2715,6 +2721,56 @@ class ForwardApp(tk.Tk):
         self.log_text.tag_configure("info", foreground="#333")
         self.log_text.tag_configure("forward", foreground="#0066cc")
         self.log_text.tag_configure("error", foreground="#cc0000")
+
+        # ============ Tab 2: NapCat 监控 ============
+        napcat_frame = ttk.Frame(self.notebook)
+        self.notebook.add(napcat_frame, text="NapCat 监控")
+
+        # --- 状态 ---
+        st_frame = ttk.LabelFrame(napcat_frame, text="状态")
+        st_frame.pack(fill="x", padx=4, pady=(4, 2))
+
+        row_st = ttk.Frame(st_frame)
+        row_st.pack(fill="x", padx=6, pady=6)
+        ttk.Label(row_st, text="监控状态:").pack(side="left")
+        self.nc_status_var = tk.StringVar(value="未启动")
+        self.nc_status_label = ttk.Label(
+            row_st, textvariable=self.nc_status_var,
+            foreground="#888", font=("", 10, "bold"),
+        )
+        self.nc_status_label.pack(side="left", padx=8)
+
+        # --- 操作按钮 ---
+        btn_frame = ttk.LabelFrame(napcat_frame, text="操作")
+        btn_frame.pack(fill="x", padx=4, pady=2)
+
+        row_btn = ttk.Frame(btn_frame)
+        row_btn.pack(fill="x", padx=6, pady=6)
+        self.nc_start_btn = ttk.Button(row_btn, text="启动监控", command=self._nc_start)
+        self.nc_start_btn.pack(side="left", padx=4)
+        self.nc_stop_btn = ttk.Button(row_btn, text="停止监控", command=self._nc_stop, state="disabled")
+        self.nc_stop_btn.pack(side="left", padx=4)
+        self.nc_restart_btn = ttk.Button(
+            row_btn, text="手动重启 NapCat", command=self._nc_restart, state="disabled",
+        )
+        self.nc_restart_btn.pack(side="left", padx=4)
+
+        # --- 二维码预览 ---
+        qr_frame = ttk.LabelFrame(napcat_frame, text="二维码预览")
+        qr_frame.pack(fill="both", expand=True, padx=4, pady=2)
+
+        self.nc_qr_label = ttk.Label(qr_frame, text="（等待二维码生成…）", foreground="#aaa")
+        self.nc_qr_label.pack(pady=20)
+
+        # --- 信息说明 ---
+        info = (
+            "NapCat 监控会定期检测 3001 端口 NapCat 实例的心跳状态。\n"
+            "掉线时自动 kill 3001 进程并重启 napcat.bat，新二维码将通过私聊发送给管理员。\n"
+            "3002 端口的 NapCat 实例不受影响。"
+        )
+        ttk.Label(napcat_frame, text=info, foreground="#888", justify="left").pack(
+            fill="x", padx=8, pady=(4, 8),
+        )
 
     @staticmethod
     def _parse_group_text(text: str) -> list[int]:
@@ -2737,7 +2793,7 @@ class ForwardApp(tk.Tk):
             self.config.admin_qq = 0
         self.config.command_enabled = bool(self.command_enabled_var.get())
         self.config.save()
-        self.status_var.set("配置已保存")
+        self.fwd_status_var.set("配置已保存")
 
     def _start_monitor(self) -> None:
         if self._busy:
@@ -2752,13 +2808,11 @@ class ForwardApp(tk.Tk):
         src_list = self._parse_group_text(self.src_text.get("1.0", "end-1c"))
         tgt_list = self._parse_group_text(self.tgt_text.get("1.0", "end-1c"))
 
-        # 转发和指令至少启用一项
         need_forward = bool(src_list and tgt_list)
         if not need_forward and not cmd_enabled:
             messagebox.showwarning("缺参数", "请至少填一组源群+目标群，或启用 #指令功能")
             return
 
-        # 更新配置
         self.config.ws_url = ws_url
         self.config.access_token = self.token_var.get().strip()
         self.config.source_groups = src_list
@@ -2777,7 +2831,6 @@ class ForwardApp(tk.Tk):
         try:
             self.forwarder = QQForwarder(self.config, self._log_message)
             self.forwarder.start()
-            # 等待一小段时间确认连接
             threading.Event().wait(1)
             if self.forwarder.is_running:
                 self.after(0, lambda: self._on_start_ok())
@@ -2790,11 +2843,11 @@ class ForwardApp(tk.Tk):
             self.after(0, lambda: self._on_start_failed(f"异常: {e}"))
 
     def _on_start_ok(self) -> None:
-        self.status_var.set("监控中…")
+        self.fwd_status_var.set("监控中…")
 
     def _on_start_failed(self, msg: str) -> None:
         self._insert_log("error", f"启动失败: {msg}\n")
-        self.status_var.set(f"启动失败: {msg}")
+        self.fwd_status_var.set(f"启动失败: {msg}")
         self._set_busy(False)
 
     def _stop_monitor(self) -> None:
@@ -2816,14 +2869,95 @@ class ForwardApp(tk.Tk):
     def _set_busy(self, busy: bool, status: str = "") -> None:
         self._busy = busy
         if status:
-            self.status_var.set(status)
+            self.fwd_status_var.set(status)
         try:
-            self.start_btn.configure(state="disabled" if busy else "normal")
-            self.stop_btn.configure(state="normal" if busy else "disabled")
+            self.fwd_start_btn.configure(state="disabled" if busy else "normal")
+            self.fwd_stop_btn.configure(state="normal" if busy else "disabled")
         except tk.TclError:
             pass
 
+    # ──────────────── NapCat 监控 ────────────────
+
+    def _nc_make_monitor(self) -> None:
+        """创建/获取 NapCatMonitor 实例。"""
+        if self._napcat_monitor is not None:
+            return
+        from qq.napcat_monitor import NapCatMonitor
+
+        ws_url = self.config.ws_url
+        token = self.config.access_token
+        admin_qq = self.config.admin_qq
+
+        def _send_cb(user_id: int, message: list[dict] | str) -> None:
+            """通过主转发客户端发送私聊。"""
+            if not self.forwarder or not self.forwarder._client:
+                self._log_message("error", "主客户端未连接，无法发送消息")
+                return
+            try:
+                self.forwarder._client.send_private_msg(user_id, message)
+            except Exception as e:
+                self._log_message("error", f"发送私聊失败: {e}")
+
+        def _is_connected() -> bool:
+            return bool(self.forwarder and self.forwarder._client
+                        and self.forwarder._client.is_connected)
+
+        def _on_state(s: str) -> None:
+            self.after(0, lambda: self._nc_update_ui(s))
+
+        self._napcat_monitor = NapCatMonitor(
+            ws_url=ws_url,
+            access_token=token,
+            admin_qq=admin_qq,
+            log_cb=self._log_message,
+            send_cb=_send_cb,
+            is_main_connected=_is_connected,
+            on_state_change=_on_state,
+        )
+
+    def _nc_start(self) -> None:
+        self._nc_make_monitor()
+        self._napcat_monitor.start()
+        self.nc_start_btn.configure(state="disabled")
+        self.nc_stop_btn.configure(state="normal")
+        self.nc_restart_btn.configure(state="normal")
+
+    def _nc_stop(self) -> None:
+        if self._napcat_monitor:
+            self._napcat_monitor.stop()
+        self.nc_start_btn.configure(state="normal")
+        self.nc_stop_btn.configure(state="disabled")
+        self.nc_restart_btn.configure(state="disabled")
+        self.nc_status_var.set("已停止")
+
+    def _nc_restart(self) -> None:
+        self._nc_make_monitor()
+        self._napcat_monitor.trigger_restart()
+
+    def _nc_update_ui(self, state: str) -> None:
+        """更新 NapCat 监控 UI。"""
+        self.nc_status_var.set(state)
+        color_map = {
+            "空闲": "#888", "监控中": "#0a0", "检测到掉线": "#c80",
+            "重启中": "#c80", "等待二维码": "#c80", "二维码已发送": "#06c",
+            "出错": "#c00",
+        }
+        self.nc_status_label.configure(foreground=color_map.get(state, "#888"))
+
+        # 二维码预览
+        if state in ("二维码已发送", "监控中") and NAPCAT_QRCODE.exists():
+            try:
+                from PIL import Image, ImageTk
+                img = Image.open(str(NAPCAT_QRCODE))
+                img.thumbnail((200, 200))
+                self._nc_qr_photo = ImageTk.PhotoImage(img)
+                self.nc_qr_label.configure(image=self._nc_qr_photo, text="")
+            except Exception:
+                pass
+
     def _on_close(self) -> None:
+        if self._napcat_monitor:
+            self._napcat_monitor.stop()
         if self.forwarder and self.forwarder.is_running:
             self.forwarder.stop()
         self._save_config()

@@ -2,7 +2,7 @@
   "semester": "2025-2026-2",
   "student_id": "2403740",
   "student_name": "",
-  "fetched_at": "2026-06-08T14:16:43",
+  "fetched_at": "2026-06-08T19:11:53",
   "courses": [
     {
       "name": "Spark开发",
@@ -113,6 +113,15 @@
       "period_end": 5
     },
     {
+      "name": "大学生创新创业训练",
+      "teacher": "向东",
+      "room": "育能楼B301",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
       "name": "Spark开发",
       "teacher": "杨增春",
       "room": "桔园Z103校企合作实训室",
@@ -140,15 +149,6 @@
       "period_end": 5
     },
     {
-      "name": "大学生创新创业训练",
-      "teacher": "向东",
-      "room": "育能楼B320",
-      "weeks": "15",
-      "day": 2,
-      "period_start": 4,
-      "period_end": 5
-    },
-    {
       "name": "Spark开发",
       "teacher": "杨增春",
       "room": "桔园Z103校企合作实训室",
@@ -161,7 +161,7 @@
       "name": "大学生创新创业训练",
       "teacher": "向东",
       "room": "育能楼B312",
-      "weeks": "2,4-11,15-18",
+      "weeks": "2,4-11,16-18",
       "day": 3,
       "period_start": 4,
       "period_end": 5
@@ -336,6 +336,15 @@
       "day": 5,
       "period_start": 6,
       "period_end": 8
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "向东",
+      "room": "育能楼B304",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 9,
+      "period_end": 10
     },
     {
       "name": "AI业务流程自动化实战（微专业）",

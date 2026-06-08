@@ -1,6 +1,6 @@
 # SSO Tools — 教务工具集开发者手册
 
-> **版本**: v1.9 | **最后更新**: 2026-06-07
+> **版本**: v2.0 | **最后更新**: 2026-06-08
 
 ---
 
@@ -1007,164 +1007,334 @@ POST/GET signOnTV.html 提交签到/签退
 
 | 处理器 | 所在文件 | 特点 |
 |--------|---------|------|
-| `CommandHandler` (GUI版) | `qq/qq_forward.py` (v1.7 指令路由重构) | Tkinter 窗口版，主要用于管理员转发场景 |
-| `CommandHandler` (无头版) | `qq/monitor_forward.py` (v1.7 `simple_routes` 分发) | 命令行无 GUI，面向普通 QQ 用户，指令更完整 |
+| `CommandHandler` (GUI版) | `qq/qq_forward.py` | Tkinter 窗口版，含转发监控 + NapCat 监控双 Tab |
+| `CommandHandler` (无头版) | `qq/monitor_forward.py` (simple_routes 分发) | 命令行无 GUI，面向普通 QQ 用户，指令最完整 |
 
-**指令差异**：`monitor_forward.py` 无头版额外支持 `#查看二课`、`#报名 <活动ID>`、`#刷新验证码` 三个用户交互指令。
+**架构总览**：
+
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant NB as NapCat (OneBot WS)
+    participant Bot as CommandHandler
+    participant DB as users.db
+    participant SSO as SSO 认证
+    participant JWGL as 教务系统
+    participant SClass as 二课系统
+
+    User->>NB: 发送 #指令
+    NB->>Bot: WebSocket 事件
+    Bot->>Bot: 指令路由匹配
+    
+    alt 认证类指令
+        Bot->>SSO: OAuth2 / 密码登录
+        SSO-->>Bot: token / ticket
+        Bot->>DB: 持久化凭证
+    else 课表类指令  
+        Bot->>JWGL: 桥接 → 获取课表 HTML
+        JWGL-->>Bot: 课表数据
+        Bot->>Bot: 解析/渲染/缓存
+    else 二课类指令
+        Bot->>SClass: SSID 桥接 → API 调用
+        SClass-->>Bot: 活动/积分数据
+        Bot->>Bot: 渲染图片/图表
+    end
+    
+    Bot-->>NB: 回复消息
+    NB-->>User: 图片/文本
+```
 
 ### 5.2 完整指令列表
 
-| 指令 | 权限 | GUI版 | 无头版 | 行为 |
-|------|------|-------|-------|------|
-| `#帮助` | 所有人 | ✅ | ✅ | 发送预渲染的帮助指令列表图片 |
-| `#登录` | 所有人 | ✅ | ✅ | 启动多步登录流程（学号→密码→验证码） |
-| `#扫码登录` | 所有人 | ✅ | ✅ | 生成二维码供扫码登录（推荐） |
-| `#取消` | 所有人 | ✅ | ✅ | 取消当前登录/报名流程 |
-| `#刷新验证码` | 所有人 | ❌ | ✅ | 刷新当前验证码图片（#登录 或 #报名 流程中） |
-| `#更新` | 已绑定 | ✅ | ✅ | 验证 token 时效 → 静默更新课表+二课 |
-| `#更新调试` | 管理员 | ✅ | ✅ | #更新 调试版（失败则自动重登录） |
-| `#更新课表` | 已绑定 | ✅ | ✅ | 拉取并更新个人课表，自动渲染本周课表图片 |
-| `#导出课表` | 已绑定 | ✅ | ✅ | 读取本地 JSON 课表 → `Schedule.save_excel()` 渲染 → 合并转发发送 `.xlsx` 文件 |
-| `#本周课表` | 已绑定 | ✅ | ✅ | 查看本周课表图片 |
-| `#今日课表` | 已绑定 | ✅ | ✅ | 查看今日课表卡片 |
-| `#明天课表` | 已绑定 | ✅ | ✅ | 查看明天课表卡片 |
-| `#第N周课表` | 已绑定 | ✅ | ✅ | 查看指定周次课表图片（如 `#第17周课表`） |
-| `#更新模板课表` | 所有人 | ✅ | ✅ | 获取 2403740 模板课表文件 |
-| `#密码更新` | 已绑定 | ✅ | ✅ | 用保存密码重新登录，刷新 token/ticket |
-| `#二课信息` | 已绑定 | ✅ | ✅ | 查询二课活动与积分 + 生成信息图 |
-| `#二课图表` | 已绑定 | ✅ | ✅ | 从 DB 缓存读取数据，渲染信息图表 |
-| `#二课列表` | **管理员** | ✅ | ✅ | 渲染活动分页列表图（每图最多10个） |
-| `#查看二课` | **管理员** | ❌ | ✅ | 渲染全部活动的详情卡片并逐张发送 |
-| `#我的二课` | **管理员** | ✅ | ✅ | 查询用户未结束活动（报名中/活动中/未开始），渲染卡片合并转发 |
-| `#报名 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动报名，交互流程：自动获取验证码 → 用户输入 → 提交报名 |
-| `#签到 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动签到（同 signOnTV 端点，channelID=5） |
-| `#签退 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动签退（同 signOnTV 端点，channelID=5） |
-| `#预约报名 <活动ID>` | 已绑定 | ✅ | ✅ | 预约「报名未开始」的活动，到点 @ 提醒 |
-| `#我的预约` | 已绑定 | ✅ | ✅ | 查看当前所有预约报名 |
-| `#扫码签到` | 已绑定 | ✅ | ✅ | 发送指令后，拍大屏二维码图片发过来自动签到/签退 |
-| `#<活动ID>` | 已绑定 | ✅ | ✅ | 查询二课活动详情（从 DB 渲染卡片图片） |
-| `#查询用户` | 管理员 | ✅ | ✅ | 读取 `accounts.json` → 导出用户信息 Excel 并合并转发 |
+| 指令 | 权限 | GUI版 | 无头版 | 数据源 | 行为 |
+|------|------|-------|-------|--------|------|
+| `#帮助` | 所有人 | ✅ | ✅ | 本地图片 | 发送预渲染的帮助指令列表图片 |
+| `#登录` | 所有人 | ✅ | ✅ | SSH 实时API | 多步对话：学号→密码→验证码→SSO登录→自动更新课表+二课 |
+| `#扫码登录` | 所有人 | ✅ | ✅ | SSH 实时API | 生成 OAuth2 二维码→用户扫码→轮询→获取 token→保存 |
+| `#取消` | 所有人 | ✅ | ✅ | 会话管理 | 取消当前登录/报名/签到流程，清理会话状态 |
+| `#刷新验证码` | 所有人 | ❌ | ✅ | SSH 实时API | 刷新当前流程的验证码图片（GUI版自动处理无需此指令） |
+| `#更新` | 已绑定 | ✅ | ✅ | JWGL+二课 实时API | 验证 token → 静默更新课表JSON + 二课缓存 |
+| `#更新调试` | **管理员** | ✅ | ✅ | JWGL 实时API | 尝试token更新课表→失败自动重登录→同时调试二课指令 |
+| `#更新课表` | 已绑定 | ✅ | ✅ | JWGL 实时API | 拉取个人课表 JSON → 自动渲染本周课表图片 → 发送 |
+| `#更新模板课表` | 所有人 | ✅ | ✅ | JWGL 实时API | 用 2403740 凭证在线拉取课表 → 保存 JSON+Excel → 合并 newjson → 发送 |
+| `#导出课表` | 已绑定 | ✅ | ✅ | 本地JSON | 读取本地课表 JSON → `Schedule.save_excel()` → 发送 `.xlsx` |
+| `#本周课表` | 已绑定 | ✅ | ✅ | 本地JSON | 加载本地课表 → 自动计算当前周 → 渲染周课表 PNG → 发送 |
+| `#今日课表` | 已绑定 | ✅ | ✅ | 本地JSON | 渲染当日课表卡片图片 |
+| `#明天课表` | 已绑定 | ✅ | ✅ | 本地JSON | 渲染次日课表卡片图片 |
+| `#第N周课表` | 已绑定 | ✅ | ✅ | 本地JSON | 解析周次参数 → 渲染指定周课表图片 |
+| `#密码更新` | 已绑定 | ✅ | ✅ | SSH 实时API | 用保存的学号+密码重新SSO登录→仅刷新 token/ticket |
+| `#二课信息` | 已绑定 | ✅ | ✅ | 二课 实时API | 查询活动/签到/总结/社团/积分数据 → 文本摘要 + 信息图 |
+| `#二课图表` | 已绑定 | ✅ | ✅ | SecondClassDB | 从 DB 缓存读取积分数据 → 渲染信息图表 PNG |
+| `#二课列表` | **管理员** | ✅ | ✅ | MasterDB | 从 master 表读取活动 → 分页渲染列表图（每图最多10个）→ 合并转发 |
+| `#查看二课` | **管理员** | ❌ | ✅ | MasterDB | 从 master 表读取所有活动 → 逐张渲染卡片 → 合并转发 |
+| `#我的二课` | **管理员** | ✅ | ✅ | UserActivityDB | 读取未结束活动ID → 逐张渲染卡片 → 合并转发 |
+| `#报名 <活动ID>` | 已绑定 | ❌ | ✅ | 二课 实时API | 获取 session → 解析报名页(s1/s2) → 验证码 → 提交报名 |
+| `#签到 <活动ID>` | 已绑定 | ❌ | ✅ | 二课 实时API | 通过 signOnTV 端点提交签到（channelID=5） |
+| `#签退 <活动ID>` | 已绑定 | ❌ | ✅ | 二课 实时API | 通过 signOnTV 端点提交签退（isSignOut=1） |
+| `#预约报名 <活动ID>` | 已绑定 | ✅ | ✅ | 本地DB+二课API | 预约「报名未开始」活动 → 到点 @ 提醒（不自动报名） |
+| `#我的预约` | 已绑定 | ✅ | ✅ | ReservationDB | 查询当前所有预约报名 |
+| `#扫码签到` | 已绑定 | ✅ | ✅ | 二课 实时API | 等待用户发大屏二维码 → opencv 解码 → 解析 signOnTV URL → 提交签到/签退 |
+| `#<活动ID>` | 已绑定 | ✅ | ✅ | DetailDB+二课API | 查询活动详情 → 从 DB 或实时 API → 渲染卡片图片 |
+| `#查询用户` | **管理员** | ✅ | ✅ | accounts.json | 读取所有用户信息 → openpyxl 导出 Excel → 发送 |
 
-### 5.3 指令分类（帮助图片分组）
+### 5.3 指令依赖链
 
-`qq/help_image.py` 将指令分为以下类别渲染为帮助图片：
+```mermaid
+graph TB
+    subgraph Auth["🔐 认证"]
+        LOGIN["#登录<br/>学号→密码→验证码"]
+        QRLOGIN["#扫码登录<br/>OAuth2二维码"]
+        PWDUP["#密码更新<br/>重登刷新ticket"]
+        UPDATE["#更新<br/>静默更新课表+二课"]
+    end
 
-| 分类 | 包含指令 |
-|------|---------|
-| 基本指令 | `#帮助`, `#扫码登录`, `#登录`, `#取消` |
-| 课表相关 | `#更新课表`, `#本周课表`, `#今日课表`, `#明天课表`, `#第N周课表`, `#导出课表`, `#更新模板课表` |
-| 凭证与更新 | `#更新`, `#密码更新` |
-| 第二课堂 | `#二课信息`, `#二课图表`, `#二课列表`, `#查看二课`, `#我的二课`, `#报名 <活动ID>`, `#签到 <活动ID>`, `#签退 <活动ID>`, `#预约报名 <活动ID>`, `#我的预约`, `#扫码签到` |
-| 管理员指令 | `#更新调试`, `#查询用户` |
+    subgraph Schedule["📅 课表"]
+        UPD_SCH["#更新课表<br/>拉取→渲染→发送"]
+        TPL_SCH["#更新模板课表<br/>模板账号2403740"]
+        WEEK["#本周课表"]
+        TODAY["#今日课表"]
+        EXPORT["#导出课表 → .xlsx"]
+    end
 
-### 5.4 工作流详解
+    subgraph Second["📊 第二课堂"]
+        ER_INFO["#二课信息<br/>实时API+图表"]
+        ER_CHART["#二课图表<br/>DB缓存"]
+        ER_LIST["#二课列表<br/>分页列表图"]
+        MY_ER["#我的二课<br/>未结束活动卡片"]
+        VIEW_ER["#查看二课<br/>全部活动卡片"]
+        DETAIL["#&lt;活动ID&gt;<br/>详情卡片"]
+        APPLY["#报名<br/>验证码提交"]
+        SIGN_IN["#签到<br/>signOnTV"]
+        SIGN_OUT["#签退<br/>signOnTV"]
+        RESERVE["#预约报名<br/>到点提醒"]
+        QR_SIGN["#扫码签到<br/>大屏二维码"]
+    end
+
+    LOGIN --> UPD_SCH
+    QRLOGIN --> UPD_SCH
+    PWDUP --> UPD_SCH
+    UPD_SCH --> WEEK
+    UPD_SCH --> TODAY
+    UPD_SCH --> EXPORT
+    TPL_SCH --> EXPORT
+    UPDATE --> UPD_SCH
+    UPDATE --> ER_INFO
+    ER_INFO --> ER_CHART
+    QR_SIGN --> SIGN_IN
+    QR_SIGN --> SIGN_OUT
+    RESERVE --> APPLY
+```
+
+### 5.4 数据源架构
+
+```mermaid
+graph LR
+    subgraph External["外部 API"]
+        SSO_API["SSO OAuth2<br/>szxy.cqtbi.edu.cn"]
+        JWGL_API["JWGL 教务<br/>jwgl.cqtbi.edu.cn:81"]
+        CLASS_API["二课系统<br/>2class.cqtbi.edu.cn"]
+    end
+
+    subgraph Cache["本地缓存"]
+        ACCOUNTS["accounts.json<br/>账号/凭证"]
+        USERS_DB["users.db<br/>SQLite 7张表"]
+        JSON_SCH["schedules/{sid}/*.json<br/>课表"]
+        XLSX_SCH["schedules/{sid}/*.xlsx<br/>课表Excel"]
+        HELP_IMG["qq/help_image.png<br/>帮助图片"]
+    end
+
+    subgraph Commands["指令层级"]
+        REAL["实时指令<br/>#登录 #更新 #报名"]
+        CACHE["缓存指令<br/>#本周课表 #二课图表"]
+        HYBRID["混合指令<br/>#&lt;ID&gt; #更新模板课表"]
+    end
+
+    REAL --> SSO_API
+    REAL --> JWGL_API
+    REAL --> CLASS_API
+    CACHE --> USERS_DB
+    CACHE --> JSON_SCH
+    HYBRID --> CLASS_API
+    HYBRID --> USERS_DB
+    ACCOUNTS --> USERS_DB
+    JSON_SCH --> XLSX_SCH
+```
+
+### 5.5 核心工作流详解
 
 #### #登录 工作流
 
-1. 用户发送 `#登录` → Bot 进入 `WAITING_STUDENT_ID` 状态，回复"请输入学号"
-2. 用户输入学号 → Bot 进入 `WAITING_PASSWORD` 状态，回复"请输入密码"
-3. 用户输入密码 → Bot 调用 SSO 登录接口
-   - 若需要验证码 → 进入 `WAITING_CAPTCHA` 状态，发送验证码图片
-   - 用户输入验证码 → Bot 调用 SSO 登录
-4. 登录成功 → 保存 token/ticket 到 `accounts.json` + `users.db`
-5. 自动更新课表 + 二课信息
-6. 用户可随时发送 `#取消` 退出流程
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant Bot as Bot
+    participant SSO as SSO 服务器
+    participant DB as users.db
 
-#### #扫码登录 工作流
-
-1. 用户发送 `#扫码登录` → Bot 调用 SSO 生成二维码图片并发送
-2. 用户使用手机扫码 → Bot 轮询扫码结果（每 2 秒一次）
-3. 扫码成功 → 获取授权 code → 换取 access_token → 获取 portal_ticket
-4. 保存凭证到 `accounts.json` + `users.db`
-5. 自动更新课表 + 二课信息
-
-#### #更新 工作流
-
-1. 用户发送 `#更新` → Bot 检查 users.db 中该 QQ 的凭证
-2. 验证 access_token 是否过期：
-   - **未过期**：直接使用现有凭证，调用 JWGL 桥接更新课表 JSON，调用二课桥接更新积分和活动总表
-   - **已过期**：尝试用保存的 password 重新 SSO 登录（如需验证码则进入等待验证码状态）
-3. 处理完成后回复用户"更新完成"
-
-#### #更新课表 → 课表查询工作流
-
-```
-#更新课表 → 拉取课表 JSON → 自动渲染本周课表图片 → 发送
-#本周课表 → 读取本地缓存 → 渲染周课表 PNG → 发送
-#今日课表 / #明天课表 → 读取缓存 → 渲染日课表卡片 → 发送
-#第N周课表 → 解析周次参数 → 读取缓存 → 渲染指定周课表 → 发送
+    User->>Bot: #登录
+    Bot->>User: 请输入学号
+    User->>Bot: 2403740
+    Bot->>User: 请输入密码
+    User->>Bot: ******
+    Bot->>SSO: GET /auth2orize?client_id=...&redirect_uri=...
+    SSO-->>Bot: 302 Login.html?accKey=xxx
+    Bot->>SSO: GET /createVertifyCode?checkId=accKey
+    SSO-->>Bot: 验证码图片
+    Bot->>User: [验证码图片]
+    User->>Bot: 验证码
+    Bot->>SSO: POST /auth2Login(ucode, RSA(pwd), rcode)
+    SSO-->>Bot: {ticket, code, redirect_url}
+    Bot->>SSO: GET /access_token(client_id, secret, code)
+    SSO-->>Bot: {access_token, expires_in}
+    Bot->>DB: 保存 token/ticket
+    Bot->>User: 登录成功
+    Note over Bot: 自动 #更新课表 + #二课信息
 ```
 
-**#更新课表 详细流程**：
-1. 按 QQ 查 users.db 获取 access_token
-2. JWGL 桥接：SSO → 门户 → JWGL → 课表 API
-3. 解析 HTML 为 JSON，保存到 `schedules/{student_id}/`
-4. 自动调用 `schedule/schedule_image.py` 渲染本周课表图片
-5. 发送周课表图片到群/私聊
+#### #报名 <活动ID> 工作流
 
-#### #报名 <活动ID> 工作流（仅无头版）
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant Bot as Bot
+    participant SClass as 二课系统
+    
+    User->>Bot: #报名 121499
+    Bot->>SClass: GET /Student/Activity/apply.html?activityID=121499
+    SClass-->>Bot: HTML（含隐藏字段 s1/s2 等）
+    Bot->>Bot: 解析状态码==3（报名中）?
+    Bot->>SClass: GET /Student/Activity/verifycode.html
+    SClass-->>Bot: 验证码图片
+    Bot->>User: [验证码图片] 请输入验证码
+    User->>Bot: 1234
+    Bot->>SClass: POST /Student/Activity/applyGo.html<br/>(activityID + activityApplyRand + s1 + s2)
+    SClass-->>Bot: {"success": true, "message": "报名成功"}
+    Bot->>User: ✅ 报名成功
+```
 
-1. 用户发送 `#报名 121499` → Bot GET 活动详情页 `apply.html?activityID=121499`
-2. 解析页面，提取隐藏字段 s1/s2
-3. 检测活动是否可报名（状态码必须为 `3` — 报名中）
-4. GET 验证码图片 `verifycode.html` → 发送给用户
-5. 用户输入验证码 → 进入 `WAITING_APPLY_CAPTCHA` 状态
-6. Bot POST `applyGo.html` 提交报名（携带 activityID + activityApplyRand + s1 + s2）
-7. 回复报名结果（成功/失败/原因）
+#### #更新模板课表 工作流
 
-#### 二课指令工作流
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant Bot as Bot
+    participant JWGL as 教务系统
+    
+    User->>Bot: #更新模板课表
+    Bot->>Bot: 查找 QQ 3200418862 凭证
+    Bot->>JWGL: 桥接 JWGL → get_schedule
+    JWGL-->>Bot: Schedule 对象
+    Bot->>Bot: 保存 schedules/2403740/{semester}.json
+    Note over Bot: 检查同目录{semester}-new.json
+    alt newjson 存在
+        Bot->>Bot: 校验格式 → 合并课程 → 去重 → 重新保存 json
+        Bot->>User: ✅ 已合并 newjson，新增 N 门课
+    end
+    Bot->>Bot: 导出 Excel
+    Bot->>User: [模板课表.xlsx]
+```
 
-| 指令 | 数据来源 | 渲染方式 | 输出 |
-|------|---------|---------|------|
-| `#二课信息` | 实时二课 API | `secondclass_image.py` 信息图 | 文字摘要 + 9:16 PNG |
-| `#二课图表` | DB 缓存 (`second_class_v2`) | `secondclass_image.py` 信息图 | 9:16 PNG |
-| `#二课列表` | DB 缓存 (`second_class_master_v2`) | `secondclass_activity_chart.py` 分页列表 | 多张列表图，合并转发 |
-| `#我的二课` | DB 缓存 (`second_class_user_activities` + `second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 单卡片 | 多张卡片图，合并转发 |
-| `#查看二课` | DB 缓存 (`second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 活动卡片 | 逐张卡片图片 |
-| `#<活动ID>` | DB 缓存 (`second_class_activity_detail_v3`) | `secondclass_activity_chart.py` 单卡片 | 单张卡片图片 |
+#### #扫码签到 工作流
 
-#### #导出课表 工作流
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant Bot as Bot
+    participant SClass as 二课系统
+    
+    User->>Bot: #扫码签到
+    Bot->>User: 请拍摄大屏二维码图片
+    User->>Bot: [二维码图片]
+    Bot->>Bot: opencv QRCodeDetector 解码
+    Bot->>Bot: parse_sign_qr() → activityID, channelID, rand, isSignOut
+    alt 签退(isSignOut=1)
+        Bot->>SClass: GET /Admin/Index/signOnTV.html<br/>?activityID=xxx&channelID=5&rand=xxx&isSignOut=1
+        SClass-->>Bot: {"success": true}
+        Bot->>User: ✅ 活动 xxx 签退成功
+    else 签到(isSignOut=0)
+        Bot->>SClass: GET signOnTV.html?isSignOut=0
+        SClass-->>Bot: {"success": true}
+        Bot->>User: ✅ 活动 xxx 签到成功
+    end
+```
 
-1. 读取本地缓存的课表 JSON （`schedules/{student_id}/`）
-2. 调用 `Schedule.save_excel()` 使用 openpyxl 渲染 Excel（横排星期，纵排大节）
-3. 通过 `command_utils.forward_files()` 以合并转发形式发送 `.xlsx` 文件
+#### #预约报名 + #我的预约 工作流
 
-#### #查询用户 工作流（管理员）
+```mermaid
+sequenceDiagram
+    participant User as QQ 用户
+    participant Bot as Bot
+    participant DB as ReservationDB
+    participant SClass as 二课系统
+    
+    User->>Bot: #预约报名 121582
+    Bot->>Bot: 查 master_v2 / detail_v3 获取报名开始时间
+    Bot->>SClass: (缓存缺失时) 实时确认活动状态
+    SClass-->>Bot: 报名未开始 ✓
+    Bot->>DB: add(qq, student_id, activity_id, meta)
+    Bot->>User: ✅ 预约成功
 
-1. 读取 `accounts.json` 中所有账号信息
-2. 使用 openpyxl 创建工作簿，写入 QQ / 学号 / 密码 / token 等字段
-3. 通过 `command_utils.forward_files()` 以合并转发形式发送 `.xlsx` 文件
+    Note over Bot,DB: ReservationScheduler 每 20s 轮询
 
-### 5.5 权限等级
+    alt 提前 1 分钟
+        Bot->>User: @你 《活动》将于 xx:xx 开放报名
+    else 到点
+        Bot->>User: @你 报名已开始，发送 #报名 <ID>
+        Bot->>DB: 自动移除该预约
+    end
+
+    User->>Bot: #我的预约
+    Bot->>DB: get_user(qq)
+    DB-->>Bot: 预约列表
+    Bot->>User: 您的预约（N 个）：[活动ID] 活动名 — 报名开始时间
+```
+
+### 5.6 会话状态机
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    
+    state "空闲" as IDLE
+    state "登录流程" as LOGIN {
+        WAITING_STUDENT_ID --> WAITING_PASSWORD: 输入学号
+        WAITING_PASSWORD --> WAITING_CAPTCHA: 输入密码
+        WAITING_CAPTHA --> COMPLETED: 输入验证码
+        WAITING_CAPTCHA --> WAITING_CAPTCHA: 验证码错误重试
+    }
+    state "更新流程" as UPDATE_FLOW {
+        WAITING_UPDATE_CAPTCHA --> COMPLETED: #更新 重新登录
+        WAITING_PASSWORD_UPDATE_CAPTCHA --> COMPLETED: #密码更新
+    }
+    state "报名流程" as APPLY_FLOW {
+        WAITING_APPLY_ACTIVITY_ID --> WAITING_APPLY_CAPTCHA: 输入活动ID
+        WAITING_APPLY_CAPTCHA --> COMPLETED: 输入验证码
+    }
+    state "扫码签到" as QR_FLOW {
+        WAITING_SIGN_QR_IMAGE --> COMPLETED: 发送二维码图片
+    }
+
+    IDLE --> LOGIN: #登录
+    IDLE --> UPDATE_FLOW: #更新(凭证过期)/#密码更新
+    IDLE --> APPLY_FLOW: #报名
+    IDLE --> QR_FLOW: #扫码签到
+    
+    LOGIN --> IDLE: 超时5分钟
+    UPDATE_FLOW --> IDLE: 超时5分钟
+    APPLY_FLOW --> IDLE: 超时5分钟
+    QR_FLOW --> IDLE: 超时5分钟
+    COMPLETED --> [*]: 登录/报名/签到成功
+```
+
+> 会话 5 分钟无操作自动超时，后台线程每 60 秒清理超时会话。状态定义在 `core/user_session.py` 的 `SessionStep` 枚举中。
+
+### 5.7 权限等级
 
 | 权限 | 说明 | 判定方式 |
 |------|------|---------|
 | 所有人 | 无需绑定，直接响应 | 无条件响应 |
 | 已绑定 | 需完成 SSO 登录绑定 | `accounts.json` 或 `users.db` 中存在该 QQ 记录 |
-| 管理员 | 特殊权限 | `forward_config.json` 中 `admin_qq` |
-
-### 5.6 会话状态机（#登录）
-
-```mermaid
-stateDiagram-v2
-    [*] --> IDLE
-    IDLE --> WAITING_STUDENT_ID: #登录
-    WAITING_STUDENT_ID --> WAITING_PASSWORD: 输入学号
-    WAITING_PASSWORD --> WAITING_CAPTCHA: 输入密码\n(需验证码)
-    WAITING_CAPTCHA --> COMPLETED: 输入验证码
-    WAITING_CAPTCHA --> WAITING_CAPTCHA: 验证码错误重试
-    WAITING_STUDENT_ID --> IDLE: 超时5分钟
-    WAITING_PASSWORD --> IDLE: 超时5分钟
-    WAITING_CAPTCHA --> IDLE: 超时5分钟
-    WAITING_UPDATE_CAPTCHA --> COMPLETED: #更新 重新登录
-    WAITING_PASSWORD_UPDATE_CAPTCHA --> COMPLETED: #密码更新
-    WAITING_APPLY_CAPTCHA --> COMPLETED: #报名 验证码
-    COMPLETED --> [*]
-```
-
-> 会话 5 分钟无操作自动超时，后台线程每 60 秒清理超时会话。状态定义在 `core/user_session.py` 的 `SessionStep` 枚举中。
-
----
+| 管理员 | 特殊权限，可执行管理类指令 | `forward_config.json` 中 `admin_qq` |
 
 ## 六、数据库表结构
 
@@ -1901,7 +2071,7 @@ sequenceDiagram
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
-| v1.9 | 2026-06-07 | 新增 `qq/reservation/` 预约报名模块文档（§4.22）：ReservationDB、ReservationScheduler、ReservationCommands、time_parser；新增 `qq/sign_commands.py` + `secondclass/qr_decode.py` 扫码签到模块文档（§4.23）：SignCommands、decode_qr_image、parse_sign_qr；新增 §9.7 signOnTV 签到/签退 API 接口文档 + §9.8 二维码签到流程 + §9.9 预约报名流程；新增 #签到、#签退、#预约报名、#我的预约、#扫码签到 五个指令（§5）；新增 §6.8 second_class_users 表文档（含 reserved_activity_ids、reservations_meta 预约字段）；会话状态新增 WAITING_SIGN_QR_IMAGE |
+| v2.0 | 2026-06-08 | 全量重写 §五 #指令系统：增加 29 条指令完整对照表（含数据源列）；新增 6 张 mermaid 工作流图（架构总览、依赖链、数据源、登录、报名、扫码签到、预约报名）；新增会话状态机图（含扫码签到状态）；新增权限等级与指令分类表 |
 | v1.6 | 2026-06-07 | 新增 `second_class_user_activities` 表（仅存 qq/student_id/activity_id），记录用户未结束活动（报名中+活动中+未开始）；新增 `SecondClassUserActivityDB` 类与 `fetch_and_store_my_unfinished_activities()` 函数；`fetch_and_store_master_data()` 移除 Step2（我的活动不再写入 master 表），改为调度器中独立拉取新表；更新数据流全景图与 DB 表结构文档 |
 | v1.5 | 2026-06-07 | 新增 §4.15.1 活动总表（`second_class_master_v2`）录入逻辑与数据流文档（含 `fetch_and_store_master_data()` 四步流程、`fetch_activities_can_apply()`、`fetch_all_my_activities()` 详解、`upsert_activities()` 写入逻辑）；新增 §4.15.2 活动详情表（`second_class_activity_detail_v3`）录入逻辑与数据流文档（含三层解析策略、`_LABEL_FIELD_MAP` 标签→字段映射表、3 个写入入口）；新增 §4.15.3 数据流全景图（mermaid 流程图）；更新 §4.16 调度器文档，补充详情拉取参数和限制说明 |
 | v1.4 | 2026-06-05 | 新增 `schedule/jwgl_client.py` JWGL 教务系统客户端（从 schedule_tool 重构提取，新增成绩查询 `get_grades()`）；新增 `secondclass_auto_score.py` 二课自动积分工具（status/signup/probe/summary/monitor/run 6大子命令，含 ddddocr 验证码识别）；新增 `sso_to_ssid.py` SSID 转换工具及 `convert_to_ssid()` 函数；新增凭证转换链文档 §7.5（含转换流程图、存储位置表、函数映射表、凭证层级图）；新增成绩查询 API 文档（`cqtbi-api.md` §3.3）；新增二课自动积分 API 文档（`DEVELOPER.md` §9.6）；更新 4.1 核心功能表和模块编号 |

@@ -2,336 +2,480 @@
   "semester": "2025-2026-2",
   "student_id": "2403740",
   "student_name": "",
-  "fetched_at": "2026-06-08T13:11:15",
+  "fetched_at": "2026-06-08T14:50:32",
   "courses": [
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
+      "name": "Spark开发",
+      "teacher": "杨增春",
       "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 1,
-      "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 1,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
+      "weeks": "17",
       "day": 2,
       "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 3,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 3,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 4,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 4,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 5,
-      "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 5,
-      "period_start": 4,
       "period_end": 5
     },
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 5,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "15",
-      "day": 5,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
-      "day": 1,
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "A505 Web前端开发实训室",
+      "weeks": "6",
+      "day": 3,
       "period_start": 1,
       "period_end": 3
     },
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "A505 Web前端开发实训室",
+      "weeks": "8-9",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "A505 Web前端开发实训室",
+      "weeks": "11",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "A505 Web前端开发实训室",
+      "weeks": "13-18",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫",
       "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "weeks": "2-3,9-18",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫,蒲梅",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "4",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "5",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "6,8",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "数据采集综合实训",
+      "teacher": "刘莹",
+      "room": "A213移动互联网开发实训室",
+      "weeks": "14",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "体育(4)",
+      "teacher": "冯志凯",
+      "room": "合川运动场",
+      "weeks": "2-5,7-9,15",
       "day": 1,
       "period_start": 4,
       "period_end": 5
     },
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "name": "形势与政策4",
+      "teacher": "孔坤杰",
+      "room": "励志楼D202数字马院VR虚拟仿真实训室（二）",
+      "weeks": "11-14",
       "day": 1,
-      "period_start": 9,
-      "period_end": 10
+      "period_start": 4,
+      "period_end": 5
     },
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
+      "name": "Spark开发",
+      "teacher": "杨增春",
       "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
-      "day": 1,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "weeks": "2,4-6",
       "day": 2,
-      "period_start": 1,
-      "period_end": 3
+      "period_start": 4,
+      "period_end": 5
     },
     {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫",
       "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "weeks": "8",
       "day": 2,
-      "period_start": 9,
-      "period_end": 10
+      "period_start": 4,
+      "period_end": 5
     },
     {
-      "name": "职业发展规划",
-      "teacher": "朱琳",
+      "name": "大学生创新创业训练",
+      "teacher": "向东",
       "room": "育能楼B318",
+      "weeks": "13,14",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "向东",
+      "room": "育能楼B320",
+      "weeks": "15",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "桔园Z103校企合作实训室",
       "weeks": "16",
       "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "大学生创新创业训练",
+      "teacher": "向东",
+      "room": "育能楼B312",
+      "weeks": "2,4-11,15-18",
+      "day": 3,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "2-3,5-6,8-16",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "数据分析可视化",
+      "teacher": "郭嗣鑫,蒲梅",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "4",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 8
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "A505 Web前端开发实训室",
+      "weeks": "2,4-6,8,10",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 8
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "12",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 8
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "A212软件新技术新产品体验实训室",
+      "weeks": "10",
+      "day": 6,
+      "period_start": 4,
+      "period_end": 8
+    },
+    {
+      "name": "数据仓库综合实训",
+      "teacher": "杨增春",
+      "room": "行知楼2001VR虚拟现实教育实训室",
+      "weeks": "4",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "行知楼2001VR虚拟现实教育实训室",
+      "weeks": "5",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥,海狄",
+      "room": "修德楼C408公共计算机实训室三",
+      "weeks": "7",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "数据仓库综合实训",
+      "teacher": "杨增春",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "8-9,11-18",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "数据采集综合实训",
+      "teacher": "刘莹",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "2-7,9,11-13",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "14-15,17-18",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "A510大型数据库实训室",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "Spark开发",
+      "teacher": "杨增春",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "2",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "修德楼C409公共计算机实训室四",
+      "weeks": "5",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥,海狄",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "6",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "数据预处理技术",
+      "teacher": "马庆祥",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "11-12",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "中华优秀传统文化",
+      "teacher": "辜秀娟",
+      "room": "修德楼C401",
+      "weeks": "1",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "中华优秀传统文化",
+      "teacher": "辜秀娟",
+      "room": "修德楼C401",
+      "weeks": "14,15,17,18",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "体育(4) 冯志凯 1-20周;数据采集综合实训 刘莹 2-7,9,11-18周;数据仓库综合实训 杨增春 4,8-9,11-18周;“匠星成长”实践课程4  1-20周;",
+      "teacher": "",
+      "room": "",
+      "weeks": "",
+      "day": 1,
+      "period_start": 0,
+      "period_end": 0
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 1,
       "period_start": 11,
       "period_end": 12
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
       "day": 3,
       "period_start": 9,
       "period_end": 10
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
       "day": 3,
       "period_start": 11,
       "period_end": 12
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
       "day": 4,
       "period_start": 9,
       "period_end": 10
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
       "day": 4,
       "period_start": 11,
       "period_end": 12
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "16",
-      "day": 5,
-      "period_start": 1,
-      "period_end": 3
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "16",
-      "day": 5,
-      "period_start": 4,
-      "period_end": 5
+      "day": 2,
+      "period_start": 9,
+      "period_end": 10
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "16",
-      "day": 5,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "16",
-      "day": 5,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 1,
-      "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 1,
-      "period_start": 4,
-      "period_end": 5
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 1,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 1,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 2,
-      "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "职业发展规划",
-      "teacher": "朱琳",
-      "room": "育能楼B318",
-      "weeks": "17",
       "day": 2,
       "period_start": 11,
       "period_end": 12
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 3,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 3,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 4,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "17",
-      "day": 4,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "17",
       "day": 5,
       "period_start": 1,
@@ -339,8 +483,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "17",
       "day": 5,
       "period_start": 4,
@@ -348,8 +492,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "17",
       "day": 5,
       "period_start": 9,
@@ -357,8 +501,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "17",
       "day": 5,
       "period_start": 11,
@@ -366,44 +510,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 1,
-      "period_start": 1,
-      "period_end": 3
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 1,
-      "period_start": 4,
-      "period_end": 5
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 1,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 1,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 2,
       "period_start": 1,
@@ -411,8 +519,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 2,
       "period_start": 4,
@@ -420,17 +528,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 2,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "职业发展规划",
-      "teacher": "朱琳",
-      "room": "育能楼B318",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 2,
       "period_start": 11,
@@ -438,8 +537,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 3,
       "period_start": 6,
@@ -447,26 +546,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 3,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 3,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 4,
       "period_start": 4,
@@ -474,26 +555,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 4,
-      "period_start": 9,
-      "period_end": 10
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
-      "weeks": "18",
-      "day": 4,
-      "period_start": 11,
-      "period_end": 12
-    },
-    {
-      "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 5,
       "period_start": 1,
@@ -501,8 +564,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 5,
       "period_start": 4,
@@ -510,8 +573,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 5,
       "period_start": 9,
@@ -519,8 +582,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "18",
       "day": 5,
       "period_start": 11,
@@ -528,8 +591,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 1,
       "period_start": 1,
@@ -537,8 +600,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 1,
       "period_start": 4,
@@ -546,8 +609,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 1,
       "period_start": 6,
@@ -555,8 +618,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 1,
       "period_start": 9,
@@ -564,8 +627,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 1,
       "period_start": 11,
@@ -573,8 +636,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 2,
       "period_start": 1,
@@ -582,8 +645,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 2,
       "period_start": 4,
@@ -591,8 +654,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 2,
       "period_start": 6,
@@ -600,8 +663,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 2,
       "period_start": 9,
@@ -609,8 +672,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 3,
       "period_start": 1,
@@ -618,8 +681,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 3,
       "period_start": 4,
@@ -627,8 +690,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 3,
       "period_start": 6,
@@ -636,8 +699,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 3,
       "period_start": 9,
@@ -645,8 +708,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 3,
       "period_start": 11,
@@ -654,8 +717,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 4,
       "period_start": 1,
@@ -663,8 +726,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 4,
       "period_start": 4,
@@ -672,8 +735,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 4,
       "period_start": 6,
@@ -681,8 +744,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 4,
       "period_start": 9,
@@ -690,8 +753,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 4,
       "period_start": 11,
@@ -699,8 +762,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 5,
       "period_start": 1,
@@ -708,8 +771,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 5,
       "period_start": 4,
@@ -717,8 +780,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 5,
       "period_start": 6,
@@ -726,8 +789,8 @@
     },
     {
       "name": "企业级项目实训",
-      "teacher": "实训指导老师",
-      "room": "桔园Z103校企合作实训室",
+      "teacher": "企业级项目实训指导老师",
+      "room": "实训楼综合实训实训室",
       "weeks": "19",
       "day": 5,
       "period_start": 9,
