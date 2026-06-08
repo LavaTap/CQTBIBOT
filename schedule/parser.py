@@ -123,7 +123,17 @@ class ScheduleParser:
 
     @staticmethod
     def _parse_div(div, day: int) -> list[Course]:
-        """从 div.kbcontent 解析多门课。"""
+        """从 div.kbcontent 解析多门课。
+
+        正方教务课表完整视图（div.kbcontent）每门课结构（按出现顺序）：
+          <font>课程名</font><br>
+          <font title='教师'>教师</font><br>
+          <font title='周次(节次)'>2-4(周)[01-02-03节]</font><br>
+          <font title='教学楼' name='jxlmc' style='display:none;'>【行知楼】</font>   ← 必须忽略
+          <font title='教室'>行知楼2018汽车技术虚拟仿真实训室</font><br>
+          ... 通知单、班级等隐藏字段 ...
+        多门课之间用 21 个以上的短横线分隔（<br>---------------------<br>）。
+        """
         html_str = str(div)
         parts = re.split(r"(?:——)+|[-]{4,}|—{3,}", html_str)
         courses = []
@@ -159,51 +169,93 @@ class ScheduleParser:
 
     @staticmethod
     def _parse_one_course(text: str, day: int) -> Course | None:
-        """解析单个课程文本，返回 Course 对象。"""
+        """解析单个课程文本，返回 Course 对象。
+
+        优先使用 <font title='...'> 结构化标签提取字段；找不到时降级到逐行文本解析。
+        关键规则：
+          - title='教室' 才是真正的教室（如「行知楼2018汽车技术虚拟仿真实训室」）
+          - title='教学楼'（name='jxlmc'，display:none）是建筑名（如「【行知楼】」），必须忽略
+          - title='周次(节次)' 的文本里同时含周次和节次，例如「2-4(周)[01-02-03节]」
+        """
         from bs4 import BeautifulSoup
 
-        # 去除 HTML 标签，提取纯文本
         soup = BeautifulSoup(text, "html.parser")
-        clean_text = soup.get_text(separator="\n")
-        lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
-        if not lines:
-            return None
-        name = lines[0].strip()
-        if not name or name in ("&nbsp;", "&nbsp", " "):
-            return None
+
         teacher = ""
-        weeks = ""
         room = ""
+        weeks = ""
         period_start = 0
         period_end = 0
+        name = ""
 
-        # ── 分离教师、周次、节次、教室 ──
-        # 正方课表 HTML 每行格式：课程名 / 教师 / 周次[节次] / ... / 教室 / ...
-        for line in lines[1:]:
-            line = line.strip()
-            if not line:
-                continue
-            # 周次: "17" 或 "2-5,7-9,15(周)"
-            wm = re.search(r"(\d[\d,\-]*)\s*\(?(周|周次|week)\)?", line)
-            if wm:
-                weeks = wm.group(1)
-                continue  # 周次行不参与 teacher/room 匹配
-
-            # 节次: "[01-02-03-04-05节]" → period_start=1, period_end=5
-            pm = re.search(r"\[(\d{2})(?:-\d{2})*-(\d{2})节\]", line)
-            if pm:
-                period_start = int(pm.group(1))
-                period_end = int(pm.group(2))
-                continue  # 节次行不参与 teacher/room 匹配
-
-            if line == name or line.startswith("["):
+        # ── 优先按 <font title='...'> 结构化解析 ──
+        fonts = soup.find_all("font")
+        for f in fonts:
+            title = (f.get("title") or "").strip()
+            name_attr = (f.get("name") or "").strip()
+            txt = f.get_text(strip=True)
+            if not txt:
                 continue
 
-            if not teacher:
-                teacher = line
-            elif not room:
-                room = line
-            # 后续行（通知单、班级等）不参与 room，保留第一次设置的 room
+            # 隐藏字段（教学楼、通知单、班级、备注、学时数等）一律跳过
+            if name_attr in ("jxlmc", "tzdbh", "wkxx", "ktmcstr", "bzstr", "xsks"):
+                continue
+            if title == "教学楼":
+                continue
+
+            if title == "教师":
+                if not teacher:
+                    teacher = txt
+                continue
+            if title == "教室":
+                if not room:
+                    room = txt
+                continue
+            if title == "周次(节次)":
+                wm = re.search(r"(\d[\d,\-]*)\s*\(?周\)?", txt)
+                if wm:
+                    weeks = wm.group(1)
+                pm = re.search(r"\[(\d{1,2})(?:-\d{1,2})*-(\d{1,2})节\]", txt)
+                if pm:
+                    period_start = int(pm.group(1))
+                    period_end = int(pm.group(2))
+                continue
+
+            # 无 title 的 font 一般是课程名（第一个）
+            if not name:
+                name = txt
+
+        # ── 找不到结构化标签时降级：按纯文本逐行 ──
+        if not name or (not room and not teacher and not weeks):
+            clean_text = soup.get_text(separator="\n")
+            lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
+            if lines and not name:
+                name = lines[0].strip()
+            for line in lines[1:] if lines else []:
+                line = line.strip()
+                if not line:
+                    continue
+                if line == name or line.startswith("["):
+                    continue
+                # 跳过【】包裹的教学楼名（如【行知楼】、【桔园】）
+                if re.match(r"^【[^】]+】$", line):
+                    continue
+                wm = re.search(r"(\d[\d,\-]*)\s*\(?周\)?", line)
+                if wm and not weeks:
+                    weeks = wm.group(1)
+                pm = re.search(r"\[(\d{1,2})(?:-\d{1,2})*-(\d{1,2})节\]", line)
+                if pm and not period_start:
+                    period_start = int(pm.group(1))
+                    period_end = int(pm.group(2))
+                if wm or pm:
+                    continue
+                if not teacher:
+                    teacher = line
+                elif not room:
+                    room = line
+
+        if not name or name in ("&nbsp;", "&nbsp", " "):
+            return None
 
         return Course(
             name=name.strip(),

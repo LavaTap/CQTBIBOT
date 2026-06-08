@@ -89,144 +89,98 @@ class Schedule:
         return mx
 
     def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None:
-        """导出标准单表课表 Excel。
+        """导出按周分 Sheet 的标准课表 Excel。
 
-        格式：横排星期（周一~周日），纵排大节（5大节），每个单元格=课程名+教师+教室+周次。
-        支持 period_start=0 的课程（放在对应星期行，用无名节次标记）。
+        每周一个 Sheet，命名「第N周」。Sheet 布局：
+            行1:  表头   节次 | 周一 | 周二 | ... | 周日
+            行2-6: 5 大节（一大节 1-3 / 二大节 4-5 / 三大节 6-8 / 四大节 9-10 / 五大节 11-12）
+            行7:  空行
+            行8:  学期: 2025-2026-2
+
+        每个单元格内容（按需拼接，缺则跳过）：
+            课程名\n教师\n周次(周)\n教室
+
+        参数 week_start/week_end=0 表示导出全部周（按课程实际周次自动推算上限）。
         """
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
         path.parent.mkdir(parents=True, exist_ok=True)
         wb = Workbook()
-        ws = wb.active
-        ws.title = self.student_id or "课表"
+        wb.remove(wb.active)
 
-        # ── 样式 ──
-        title_font = Font(bold=True, size=13)
-        header_font = Font(bold=True, size=11, color="FFFFFF")
-        header_fill = PatternFill("solid", fgColor="4472C4")
+        header_font = Font(bold=True, size=11)
+        header_fill = PatternFill("solid", fgColor="D6E4F0")
         period_font = Font(bold=True, size=10)
-        period_fill = PatternFill("solid", fgColor="D6E4F0")
-        name_font = Font(bold=True, size=10)
-        data_font = Font(size=9)
+        period_fill = PatternFill("solid", fgColor="EAF1F8")
         thin = Side(style="thin")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
         center = Alignment(horizontal="center", vertical="center", wrap_text=True)
         left_top = Alignment(horizontal="left", vertical="top", wrap_text=True)
 
-        # ── 标准大节定义 ──
-        period_labels = [
-            (1, 3, "第一节"),
-            (4, 5, "第二节"),
-            (6, 8, "第三节"),
-            (9, 10, "第四节"),
-            (11, 12, "第五节"),
+        period_rows = [
+            (1, 3, "一大节\n1-3节"),
+            (4, 5, "二大节\n4-5节"),
+            (6, 8, "三大节\n6-8节"),
+            (9, 10, "四大节\n9-10节"),
+            (11, 12, "五大节\n11-12节"),
         ]
+        day_names = ["节次", "周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
-        # 从课程实际 period_start 推算应该放在哪个大节
-        def _period_group(ps: int, pe: int) -> tuple[int, int, str]:
-            """根据起始节次返回 (group_ps, group_pe, label)。
-            一门课只归属它起始的那个大节（如 1-5 节属第一节，不跨行显示）。
-            """
-            for g_ps, g_pe, label in period_labels:
-                if g_ps <= ps <= g_pe or (ps < g_ps <= pe):
-                    return (g_ps, g_pe, label)
-            # period=0 → 无节次信息，归入第五节之后
-            return (13, 14, "无节次")
+        max_w = self._max_week()
+        ws_start = week_start if week_start > 0 else 1
+        ws_end = week_end if week_end > 0 else max_w
+        if ws_start > ws_end:
+            ws_start, ws_end = ws_end, ws_start
 
-        # ── 标题行 ──
-        sid_info = f"{self.student_name}({self.student_id})" if self.student_name else self.student_id
-        ws.merge_cells("A1:H1")
-        title_cell = ws["A1"]
-        title_cell.value = f"课表  |  {sid_info}  |  学期:{self.semester}  |  获取:{self.fetched_at[:10] if self.fetched_at else ''}"
-        title_cell.font = title_font
-        title_cell.alignment = center
+        def _cell_text(course: Course) -> str:
+            parts = [course.name]
+            if course.teacher:
+                parts.append(course.teacher)
+            if course.weeks:
+                parts.append(f"{course.weeks}(周)")
+            if course.room:
+                parts.append(course.room)
+            return "\n".join(parts)
 
-        # ── 表头（第2行）──
-        day_names = ["节次", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-        for ci, name in enumerate(day_names, 1):
-            cell = ws.cell(row=2, column=ci, value=name)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = center
-            cell.border = border
+        for w in range(ws_start, ws_end + 1):
+            ws = wb.create_sheet(title=f"第{w}周")
 
-        # ── 数据行（第3行开始）──
-        # 将所有课程按 (period_group_key, day) 分组
-        group_map: dict[tuple[int, int, str], list[Course]] = {}
-        for c in self.courses:
-            if not c.name:
-                continue
-            g_ps, g_pe, label = _period_group(c.period_start, c.period_end)
-            key = (g_ps, g_pe, label)
-            group_map.setdefault(key, []).append(c)
+            for ci, name in enumerate(day_names, 1):
+                cell = ws.cell(row=1, column=ci, value=name)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = center
+                cell.border = border
 
-        # 按大节顺序 + 天顺序排序输出
-        row = 3
-        for g_ps, g_pe, label in period_labels + [(13, 14, "无节次")]:
-            key = (g_ps, g_pe, label)
-            courses_in_group = group_map.get(key, [])
-            # 按天排序
-            by_day: dict[int, list[Course]] = {}
-            for c in courses_in_group:
-                by_day.setdefault(c.day, []).append(c)
-
-            max_rows = max((len(by_day.get(d, [])) for d in range(1, 8)), default=0)
-            if max_rows == 0:
-                # 没有任何课程，但保留行作为占位
-                cell = ws.cell(row=row, column=1, value=label)
+            for ri, (ps, pe, label) in enumerate(period_rows, start=2):
+                cell = ws.cell(row=ri, column=1, value=label)
                 cell.font = period_font
                 cell.fill = period_fill
                 cell.alignment = center
                 cell.border = border
                 for day in range(1, 8):
-                    ws.cell(row=row, column=day + 1).border = border
-                row += 1
-                continue
-
-            for ei in range(max_rows):
-                # 节次列（只在第一行显示大节名）
-                if ei == 0:
-                    cell = ws.cell(row=row, column=1, value=label)
-                    cell.font = period_font
-                    cell.fill = period_fill
-                else:
-                    cell = ws.cell(row=row, column=1, value="")
-                cell.alignment = center
-                cell.border = border
-
-                for day in range(1, 8):
                     col = day + 1
-                    day_courses = by_day.get(day, [])
-                    course = day_courses[ei] if ei < len(day_courses) else None
-                    cell = ws.cell(row=row, column=col)
+                    matches = [
+                        c for c in self.courses
+                        if c.day == day
+                        and c.period_start <= pe and c.period_end >= ps
+                        and c.week_matches(w)
+                    ]
+                    cell = ws.cell(row=ri, column=col)
                     cell.border = border
-                    if course:
-                        parts = [course.name]
-                        if course.teacher:
-                            parts.append(course.teacher)
-                        if course.room:
-                            parts.append(course.room)
-                        if course.weeks:
-                            parts.append(f"{course.weeks}(周)")
-                        if course.period_start > 0:
-                            parts.append(f"[{course.period_start}-{course.period_end}节]")
-                        cell.value = "\n".join(parts)
-                        cell.font = name_font
-                        cell.alignment = left_top
-                        ws.row_dimensions[row].height = max(
-                            ws.row_dimensions[row].height or 30, len(parts) * 16
+                    cell.alignment = left_top
+                    if matches:
+                        cell.value = "\n---\n".join(_cell_text(m) for m in matches)
+                        ws.row_dimensions[ri].height = max(
+                            ws.row_dimensions[ri].height or 60, 60,
                         )
-                    else:
-                        cell.font = data_font
-                        cell.alignment = center
-                        cell.value = ""
-                row += 1
 
-        # ── 列宽 ──
-        ws.column_dimensions["A"].width = 10
-        for ci in range(2, 9):
-            ws.column_dimensions[chr(64 + ci)].width = 22
+            ws.cell(row=8, column=1, value="学期:").font = Font(bold=True)
+            ws.cell(row=8, column=2, value=self.semester)
+
+            ws.column_dimensions["A"].width = 10
+            for ci in range(2, 9):
+                ws.column_dimensions[chr(64 + ci)].width = 22
 
         wb.save(path)

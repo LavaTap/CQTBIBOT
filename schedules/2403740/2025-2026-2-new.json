@@ -1,0 +1,737 @@
+{
+  "semester": "2025-2026-2",
+  "student_id": "2403740",
+  "student_name": "",
+  "fetched_at": "2026-06-08T13:11:15",
+  "courses": [
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 3,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "15",
+      "day": 5,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "职业发展规划",
+      "teacher": "朱琳",
+      "room": "育能楼B318",
+      "weeks": "16",
+      "day": 2,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 3,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "16",
+      "day": 5,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 1,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "职业发展规划",
+      "teacher": "朱琳",
+      "room": "育能楼B318",
+      "weeks": "17",
+      "day": 2,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 3,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "17",
+      "day": 5,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 1,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 2,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "职业发展规划",
+      "teacher": "朱琳",
+      "room": "育能楼B318",
+      "weeks": "18",
+      "day": 2,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 3,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 3,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "18",
+      "day": 5,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 1,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 1,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 1,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 2,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 2,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 3,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 3,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 3,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 3,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 4,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 4,
+      "period_start": 9,
+      "period_end": 10
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 4,
+      "period_start": 11,
+      "period_end": 12
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 5,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 8
+    },
+    {
+      "name": "企业级项目实训",
+      "teacher": "实训指导老师",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "19",
+      "day": 5,
+      "period_start": 9,
+      "period_end": 10
+    }
+  ]
+}

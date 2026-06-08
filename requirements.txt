@@ -8,3 +8,4 @@ websocket-client>=1.6
 ddddocr>=1.5
 opencv-python-headless>=4.10
 numpy>=1.26
+watchdog>=3.0

@@ -2052,9 +2052,9 @@ class CommandHandler:
                 self._reply(msg_type, group_id, user_id,
                             "正在渲染 %s 的二课活动列表(%d个，共%d页)…" % (student_info, total, pages))
 
-            # ── 分页渲染（每页最多10个）：存到 schedules/<student_id>/list/ ──
+            # ── 分页渲染（每页最多10个）──
             from secondclass.secondclass_activity_chart import render_all_activity_lists
-            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / student_id / "list"
+            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / "_activity_list_charts"
             chart_dir.mkdir(parents=True, exist_ok=True)
 
             paths = render_all_activity_lists(activities, student_info=student_info, output_dir=chart_dir)
