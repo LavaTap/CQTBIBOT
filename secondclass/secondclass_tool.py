@@ -462,7 +462,6 @@ class SecondClassUserActivityDB:
                     can_apply TEXT DEFAULT ''
                 )
             """)
-            # 兼容旧表：如果 can_apply 列不存在则添加
             try:
                 conn.execute("ALTER TABLE second_class_user_activities ADD COLUMN can_apply TEXT DEFAULT ''")
             except Exception:
@@ -479,9 +478,8 @@ class SecondClassUserActivityDB:
             conn.close()
 
     def upsert_activities(
-        self, student_id: str, activity_ids: list[str], qq: int = 0
+        self, student_id: str, activity_ids: list[str], qq: int = 0,
     ) -> int:
-        """批量插入活动ID（按 student_id+activity_id 去重）。"""
         if not activity_ids or not student_id:
             return 0
         now_iso = datetime.now().isoformat(timespec="seconds")
@@ -508,7 +506,6 @@ class SecondClassUserActivityDB:
         return count
 
     def get_by_student_id(self, student_id: str) -> list[dict]:
-        """按学号查询所有未结束活动。"""
         if not student_id:
             return []
         with self._lock:
@@ -522,7 +519,6 @@ class SecondClassUserActivityDB:
             return [dict(r) for r in rows]
 
     def get_activity_ids_by_student_id(self, student_id: str) -> list[str]:
-        """按学号查所有未结束活动的 activity_id 列表。"""
         if not student_id:
             return []
         with self._lock:
@@ -536,7 +532,6 @@ class SecondClassUserActivityDB:
             return [r["activity_id"] for r in rows]
 
     def delete_by_activity_id(self, activity_id: str) -> bool:
-        """按 activity_id 删除记录。"""
         if not activity_id:
             return False
         with self._lock:
@@ -551,7 +546,6 @@ class SecondClassUserActivityDB:
             return deleted
 
     def clear_by_student_id(self, student_id: str) -> int:
-        """清空指定学生的所有记录。"""
         if not student_id:
             return 0
         with self._lock:
@@ -2567,17 +2561,14 @@ def fetch_and_store_my_unfinished_activities(
     """拉取"我的活动"未结束标签页（报名中+活动中+未开始）并存储到独立表。
 
     仅提取 activity_id，不写入 master 表。
-
     返回: {"tab1_count": N, "tab2_count": N, "tab5_count": N, "total": N}
     """
-    # 1. 获取 myActivity.html 页面
     r = sess.get(f"{BASE_URL}/Student/My/myActivity.html", timeout=15)
     if "top.location.href" in r.text or r.status_code in (301, 302, 303, 307):
         raise SecondClassAuthError("二课登录已过期，请重新 #扫码登录")
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # 2. 解析 tabs 1,2,5 的 activity_id
     all_ids: list[str] = []
     tab_counts: dict[str, int] = {}
     for tab_id in ("1", "2", "5"):
@@ -2592,7 +2583,6 @@ def fetch_and_store_my_unfinished_activities(
         log.warning("fetch_and_store_my_unfinished_activities: student_id 为空")
         return {**tab_counts, "total": 0}
 
-    # 3. 写入新表（先清空旧记录，再写入新数据）
     db = SecondClassUserActivityDB()
     db.clear_by_student_id(student_id)
     if all_ids:
@@ -2601,8 +2591,7 @@ def fetch_and_store_my_unfinished_activities(
     else:
         log.info("二课未结束活动为空: student_id=%s", student_id)
 
-    stats = {**tab_counts, "total": len(all_ids)}
-    return stats
+    return {**tab_counts, "total": len(all_ids)}
 
 
 def _parse_my_activity_tab_html(soup: BeautifulSoup, tab_id: str) -> list[dict]:
@@ -2987,10 +2976,24 @@ def fetch_and_store_master_data(
         log.warning("二课总表: student_id=%s 可报名拉取失败: %s", student_id, e)
         stats["can_apply"] = 0
 
-    # (Step 2 已移除：我的活动不再写入 master 表，改用独立表 second_class_user_activities)
-    stats["my_total"] = 0
+    # 2. 拉取我的活动（所有标签页）
+    try:
+        my_activities = fetch_all_my_activities(sess)
+        tab_counts = {}
+        total_my = 0
+        for tab_name, acts in my_activities.items():
+            cnt = master_db.upsert_activities(student_id, acts, qq=qq)
+            tab_counts[tab_name] = cnt
+            total_my += cnt
+        stats["my_activities"] = tab_counts
+        stats["my_total"] = total_my
+        log.info("二课总表: student_id=%s 我的活动 %d 个", student_id, total_my)
+    except Exception as e:
+        log.warning("二课总表: student_id=%s 我的活动拉取失败: %s", student_id, e)
+        stats["my_activities"] = {}
+        stats["my_total"] = 0
 
-    stats["total_count"] = stats.get("can_apply", 0)
+    stats["total_count"] = stats.get("can_apply", 0) + stats.get("my_total", 0)
 
     # 3. 可选：拉取活动详情
     if fetch_details:
@@ -3216,12 +3219,7 @@ def fetch_apply_page(sess: requests.Session, activity_id: str) -> dict:
         raise ActivityApplyError(f"活动页面返回 {r.status_code}")
 
     # 检查是否被重定向到登录页
-    cookie_names = {c.name for c in sess.cookies}
-    if "login" in r.url.lower() or "SSID" not in cookie_names:
-        log.warning(
-            "fetch_apply_page 疑似登录失效: url=%s cookies=%s status=%s",
-            r.url, sorted(cookie_names), r.status_code,
-        )
+    if "login" in r.url.lower() or "ssid" not in [c.name for c in sess.cookies]:
         raise SecondClassAuthError("二课登录已过期，请重新 #扫码登录")
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -3288,15 +3286,19 @@ def fetch_apply_page(sess: requests.Session, activity_id: str) -> dict:
             s2 = val
 
     # 兜底：从 JavaScript 中提取 s1/s2 赋值
+    # 实际页面使用对象字面量语法：s1:"29704", s2:"78df...c4fdc"
+    # 也兼容 s1 = "..." / s1 = ... 的写法
     if not s1 or not s2:
         for script in soup.select("script"):
             js = script.get_text()
             if not s1:
-                m = re.search(r's1\s*=\s*["\']?(\w+)["\']?', js)
+                m = re.search(r'\bs1\s*[:=]\s*["\']([^"\']+)["\']', js) \
+                    or re.search(r'\bs1\s*[:=]\s*(\w+)', js)
                 if m:
                     s1 = m.group(1)
             if not s2:
-                m = re.search(r's2\s*=\s*["\']?(\w+)["\']?', js)
+                m = re.search(r'\bs2\s*[:=]\s*["\']([^"\']+)["\']', js) \
+                    or re.search(r'\bs2\s*[:=]\s*(\w+)', js)
                 if m:
                     s2 = m.group(1)
 
@@ -3591,6 +3593,193 @@ def probe_score_edit_endpoints(sess) -> dict:
         "tried_get": list(SCORE_EDIT_GET_PROBES),
         "tried_post": list(SCORE_EDIT_POST_PROBES),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 分数编辑：拉明细 + 本地写入
+# ──────────────────────────────────────────────────────────────────────────────
+
+# 关键字 → 本地 second_class_v2 字段映射
+# 顺序敏感：先匹配更具体的（如"职业素养"优先于"讲座"）
+_SCORE_FIELD_KEYWORDS = (
+    (("职业", "素养", "实习", "就业"), "career_score"),
+    (("劳动", "劳动教育"), "labor_score"),
+    (("文艺", "美育", "艺术"), "art_score"),
+    (("志愿", "公益"), "volunteer_score"),
+    (("专业", "技能", "竞赛", "学术"), "skill_score"),
+    (("思想", "政治", "讲座", "党", "时政"), "thought_score"),
+)
+
+
+def _classify_item_to_field(item: dict) -> str:
+    """根据明细项名称返回 second_class_v2 中要写入的字段名；未匹配返回 ""。"""
+    name = str(item.get("item_name") or item.get("name") or "")
+    if not name:
+        return ""
+    for keywords, field in _SCORE_FIELD_KEYWORDS:
+        for kw in keywords:
+            if kw in name:
+                return field
+    return ""
+
+
+def _normalize_score_item(raw: dict, source_module_id: str) -> dict:
+    """把服务器返回的原始明细项规范化。"""
+    category_map = {
+        "2": "思想成长与引领",
+        "4": "职业精神与素质养成",
+    }
+    name = str(raw.get("name") or raw.get("itemName") or "")
+    try:
+        score = float(raw.get("score") or 0)
+    except (TypeError, ValueError):
+        score = 0.0
+    try:
+        limit = float(raw.get("limit") or raw.get("max") or 0)
+    except (TypeError, ValueError):
+        limit = 0.0
+    item_id = str(raw.get("id") or raw.get("itemID") or raw.get("scoreID") or "")
+    return {
+        "category": category_map.get(source_module_id, "其他"),
+        "item_name": name,
+        "score": score,
+        "limit": limit,
+        "item_id": item_id,
+        "source_module_id": source_module_id,
+    }
+
+
+def fetch_score_items_with_session(
+    sess, year_id: str = "20252026", term_id: str = "2"
+) -> list[dict]:
+    """合并 moduleID=2(思想政治) + moduleID=4(实践美育) 的明细项。
+
+    返回 [{category, item_name, score, limit, item_id, source_module_id}, ...]
+    """
+    items: list[dict] = []
+    for module_id in ("2", "4"):
+        try:
+            data = fetch_module_scores_with_session(
+                sess, module_id=module_id, year_id=year_id, term_id=term_id
+            )
+        except Exception as e:
+            log.error("fetch_score_items: module=%s 失败: %s", module_id, e)
+            continue
+        raw_list = data.get("raw", []) if isinstance(data, dict) else []
+        if not isinstance(raw_list, list):
+            log.warning("module=%s raw 非 list: %r", module_id, type(raw_list))
+            continue
+        for raw_item in raw_list:
+            if isinstance(raw_item, dict):
+                items.append(_normalize_score_item(raw_item, module_id))
+
+    log.info("fetch_score_items: 共 %d 项 (year=%s, term=%s)", len(items), year_id, term_id)
+    return items
+
+
+def save_score_item_local(
+    student_id: str,
+    item: dict,
+    new_score: float,
+    db: "SecondClassDB | None" = None,
+) -> dict:
+    """本地写入：把 item 对应字段更新为 new_score，其他字段保留。
+
+    返回 {success, mode, field, old_score, new_score, message}
+    """
+    if not student_id:
+        return {
+            "success": False,
+            "mode": "local",
+            "field": "",
+            "old_score": 0.0,
+            "new_score": new_score,
+            "message": "student_id 为空",
+        }
+
+    field = _classify_item_to_field(item)
+    if not field:
+        return {
+            "success": False,
+            "mode": "local",
+            "field": "",
+            "old_score": 0.0,
+            "new_score": new_score,
+            "message": f"无法分类: {item.get('item_name', '')}",
+        }
+
+    if db is None:
+        db = SecondClassDB()
+
+    # 先取整行；不存在则用空字典 merge
+    existing = db.get_by_student_id(student_id) or {}
+    old_score = float(existing.get(field) or 0)
+
+    # 保留所有字段，仅覆盖目标字段
+    merged_kw: dict = {}
+    preservable = [
+        "realname",
+        "deptname",
+        "college",
+        "major",
+        "year_id",
+        "semester_info",
+        "total_score",
+        "activity_count",
+        "unsigned_count",
+        "unfinished_count",
+        "club_count",
+        "thought_score",
+        "skill_score",
+        "career_score",
+        "total_score_all",
+        "thought_score_all",
+        "skill_score_all",
+        "career_score_all",
+        "ideology_score",
+        "labor_score",
+        "art_score",
+        "volunteer_score",
+        "ideology_score_all",
+        "labor_score_all",
+        "art_score_all",
+        "volunteer_score_all",
+        "total_duration",
+        "total_duration_all",
+        "ideology_duration",
+        "labor_duration",
+        "art_duration",
+        "volunteer_duration",
+        "ideology_duration_all",
+        "labor_duration_all",
+        "art_duration_all",
+        "volunteer_duration_all",
+    ]
+    for f in preservable:
+        if f in existing:
+            merged_kw[f] = existing[f]
+    merged_kw[field] = float(new_score)
+
+    qq = int(existing.get("qq") or 0)
+    db.upsert(student_id=student_id, qq=qq, **merged_kw)
+
+    log.info(
+        "save_score_item_local: student_id=%s field=%s %.2f → %.2f",
+        student_id,
+        field,
+        old_score,
+        new_score,
+    )
+    return {
+        "success": True,
+        "mode": "local",
+        "field": field,
+        "old_score": old_score,
+        "new_score": float(new_score),
+        "message": f"已写本地: {field}={new_score}",
+    }
+
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────

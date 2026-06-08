@@ -177,6 +177,8 @@ class ScheduleParser:
         period_start = 0
         period_end = 0
 
+        # ── 分离教师、周次、节次、教室 ──
+        # 正方课表 HTML 每行格式：课程名 / 教师 / 周次[节次] / ... / 教室 / ...
         for line in lines[1:]:
             line = line.strip()
             if not line:
@@ -185,27 +187,23 @@ class ScheduleParser:
             wm = re.search(r"(\d[\d,\-]*)\s*\(?(周|周次|week)\)?", line)
             if wm:
                 weeks = wm.group(1)
+                continue  # 周次行不参与 teacher/room 匹配
 
             # 节次: "[01-02-03-04-05节]" → period_start=1, period_end=5
-            # 也兼容 "[04-05节]" 标准格式（节在括号内）
             pm = re.search(r"\[(\d{2})(?:-\d{2})*-(\d{2})节\]", line)
             if pm:
                 period_start = int(pm.group(1))
                 period_end = int(pm.group(2))
-            if not line.startswith("[") and not line.endswith(")") and "周" not in line:
-                if not teacher and line != name:
-                    teacher = line
-                elif room and line != name:
-                    room = line
-                elif not room and line != name:
-                    room = line
+                continue  # 节次行不参与 teacher/room 匹配
 
-        clean_text_lower = clean_text.lower().replace(" ", "")
-        candidates = [l for l in lines[1:] if l not in (name, teacher, weeks) and "周" not in l and not l.startswith("[")]
-        for c in candidates:
-            if c not in (teacher, name):
-                room = c
-                break
+            if line == name or line.startswith("["):
+                continue
+
+            if not teacher:
+                teacher = line
+            elif not room:
+                room = line
+            # 后续行（通知单、班级等）不参与 room，保留第一次设置的 room
 
         return Course(
             name=name.strip(),

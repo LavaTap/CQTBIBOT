@@ -559,8 +559,7 @@ def generate_sample_card() -> Path:
 
 # ════════════════════ 批量列表渲染（最多10个活动一图）════════════════════
 
-LIST_OUTPUT_DIR = PROJECT_ROOT / "schedules" / "_activity_list_charts"
-LIST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# 调用方必须传入 output_dir（按学号分子目录，如 schedules/<student_id>/list/）。
 
 LIST_CARD_W = 420
 LIST_ROW_H = 50
@@ -683,9 +682,10 @@ class ActivityListRenderer:
 def render_activity_list(activities: list[dict], page: int = 1,
                          student_info: str = "",
                          output_dir: Path | None = None) -> Path:
-    """渲染一批活动中最多10个到一张图。"""
+    """渲染一批活动中最多10个到一张图。output_dir 必填。"""
     if output_dir is None:
-        output_dir = LIST_OUTPUT_DIR
+        raise ValueError("render_activity_list: output_dir 必填（按学号分子目录）")
+    output_dir.mkdir(parents=True, exist_ok=True)
     fname = "activity_list_p%d.png" % page
     output_path = output_dir / fname
     renderer = ActivityListRenderer(activities, page=page, student_info=student_info)
@@ -696,9 +696,9 @@ def render_activity_list(activities: list[dict], page: int = 1,
 def render_all_activity_lists(activities: list[dict],
                               student_info: str = "",
                               output_dir: Path | None = None) -> list[Path]:
-    """将所有活动分页渲染，每页最多10个，返回所有图片路径。"""
+    """将所有活动分页渲染，每页最多10个，返回所有图片路径。output_dir 必填。"""
     if output_dir is None:
-        output_dir = LIST_OUTPUT_DIR
+        raise ValueError("render_all_activity_lists: output_dir 必填（按学号分子目录）")
     output_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     total = len(activities)
@@ -727,4 +727,7 @@ def generate_sample_list() -> Path:
         {"activity_id": "100201", "activity_name": "大数据技术创新创业大赛", "module_name": "专业技能",
          "score": 4.0, "status_name": "活动中", "start_date": "2025-07-15"},
     ]
-    return render_activity_list(sample_acts, page=1, student_info="阳历样例")
+    return render_activity_list(
+        sample_acts, page=1, student_info="阳历样例",
+        output_dir=PROJECT_ROOT / "schedules" / "_sample" / "list",
+    )

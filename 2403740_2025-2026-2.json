@@ -2,7 +2,7 @@
   "semester": "2025-2026-2",
   "student_id": "2403740",
   "student_name": "",
-  "fetched_at": "2026-06-08T13:25:31",
+  "fetched_at": "2026-06-01T17:19:16",
   "courses": [
     {
       "name": "Spark开发",
@@ -95,6 +95,15 @@
       "period_end": 5
     },
     {
+      "name": "AIGC内容创作与智能生成技术（微专业）",
+      "teacher": "李永",
+      "room": "行知楼2006 AI智能感知与系统集成实训室",
+      "weeks": "14",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 4
+    },
+    {
       "name": "体育(4)",
       "teacher": "冯志凯",
       "room": "合川运动场",
@@ -140,15 +149,6 @@
       "period_end": 5
     },
     {
-      "name": "大学生创新创业训练",
-      "teacher": "向东",
-      "room": "育能楼B320",
-      "weeks": "15",
-      "day": 2,
-      "period_start": 4,
-      "period_end": 5
-    },
-    {
       "name": "Spark开发",
       "teacher": "杨增春",
       "room": "桔园Z103校企合作实训室",
@@ -161,7 +161,7 @@
       "name": "大学生创新创业训练",
       "teacher": "向东",
       "room": "育能楼B312",
-      "weeks": "2,4-11,15-18",
+      "weeks": "2,4-11,14-18",
       "day": 3,
       "period_start": 4,
       "period_end": 5
@@ -349,15 +349,6 @@
     {
       "name": "AIGC内容创作与智能生成技术（微专业）",
       "teacher": "李永",
-      "room": "行知楼2001VR虚拟现实教育实训室",
-      "weeks": "10-11",
-      "day": 5,
-      "period_start": 9,
-      "period_end": 12
-    },
-    {
-      "name": "AIGC内容创作与智能生成技术（微专业）",
-      "teacher": "李永",
       "room": "行知楼2006 AI智能感知与系统集成实训室",
       "weeks": "12-15,17-18",
       "day": 5,
@@ -372,15 +363,6 @@
       "day": 6,
       "period_start": 9,
       "period_end": 12
-    },
-    {
-      "name": "体育(4) 冯志凯 1-20周;数据采集综合实训 刘莹 2-7,9,11-18周;数据仓库综合实训 杨增春 4,8-9,11-18周;“匠星成长”实践课程4  1-20周;",
-      "teacher": "",
-      "room": "",
-      "weeks": "",
-      "day": 1,
-      "period_start": 0,
-      "period_end": 0
     }
   ]
 }

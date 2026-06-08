@@ -2,7 +2,8 @@
 chcp 65001 >nul
 title Secondclass Auto Score - 2403740
 
-set "DIR=%~dp0"
+rem 本文件位于 tools/，项目根需回退一级
+set "DIR=%~dp0..\"
 set "PY=%DIR%venv\Scripts\python.exe"
 set "SCRIPT=%DIR%secondclass_auto_score.py"
 

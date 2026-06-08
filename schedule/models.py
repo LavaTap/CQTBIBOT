@@ -126,9 +126,11 @@ class Schedule:
 
         # 从课程实际 period_start 推算应该放在哪个大节
         def _period_group(ps: int, pe: int) -> tuple[int, int, str]:
-            """根据起止节次返回 (group_ps, group_pe, label)。"""
+            """根据起始节次返回 (group_ps, group_pe, label)。
+            一门课只归属它起始的那个大节（如 1-5 节属第一节，不跨行显示）。
+            """
             for g_ps, g_pe, label in period_labels:
-                if ps <= g_pe and pe >= g_ps:
+                if g_ps <= ps <= g_pe or (ps < g_ps <= pe):
                     return (g_ps, g_pe, label)
             # period=0 → 无节次信息，归入第五节之后
             return (13, 14, "无节次")

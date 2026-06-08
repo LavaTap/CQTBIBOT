@@ -244,6 +244,7 @@ class _LoginState:
     PASSWORD_UPDATE_CAPTCHA = "password_update_captcha"
     WAIT_APPLY_ACTIVITY_ID = "wait_apply_activity_id"
     WAIT_APPLY_CAPTCHA = "wait_apply_captcha"
+    WAIT_SIGN_QR_IMAGE = "wait_sign_qr_image"
 
 
 @dataclass
@@ -285,6 +286,11 @@ class CommandHandler:
     UPDATE_DEBUG_CMD = "#更新调试"
     PASSWORD_UPDATE_CMD = "#密码更新"
     APPLY_CMD = "#报名"
+    RESERVE_CMD = "#预约报名"
+    MY_RESERVATIONS_CMD = "#我的预约"
+    SIGN_IN_CMD = "#签到"
+    SIGN_OUT_CMD = "#签退"
+    SCAN_SIGN_CMD = "#扫码签到"
     LOGIN_SESSION_TIMEOUT = 120  # 秒
 
     def __init__(self, config: ForwardConfig, client: OneBotClient,
@@ -330,6 +336,14 @@ class CommandHandler:
 
     # ---- 指令入口 ----
 
+    def _run_async(self, target: Callable, *args: object) -> None:
+        """以守护线程跑后台任务（统一封装，避免到处写 threading.Thread）。"""
+        threading.Thread(target=target, args=args, daemon=True).start()
+
+    def _hit_log(self, text: str, user_id: int, group_id: int) -> None:
+        """统一打 “指令命中” 日志。"""
+        self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+
     def try_handle(self, event: dict) -> bool:
         """尝试处理指令。命中返回 True，调用方应跳过转发。"""
         if not self.config.command_enabled:
@@ -360,9 +374,9 @@ class CommandHandler:
         if not text.startswith("#"):
             return False
 
-        # #帮助 对所有人开放
+        # ===== 帮助 =====
         if text == self.HELP_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+            self._hit_log(text, user_id, group_id)
             is_admin = user_id == self.config.admin_qq
             try:
                 img_path = get_help_image(is_admin=is_admin)
@@ -372,117 +386,15 @@ class CommandHandler:
                 self._reply(msg_type, group_id, user_id, "帮助图片加载失败，请查看日志")
             return True
 
-        # #更新模板课表 — 所有人可用，发送本地 2403740 课表文件
-        if text == self.UPDATE_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            self._cmd_send_template_schedule(msg_type, group_id, user_id)
-            return True
-
-        # #更新课表 — 所有人可用，按 QQ 拉取个人课表
-        if text == self.UPDATE_MY_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            self._reply(msg_type, group_id, user_id, "正在拉取课表…")
-            threading.Thread(
-                target=self._cmd_update_my_schedule,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #导出课表 — 所有人可用，导出课表为Excel
-        if text == self.EXPORT_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_export_schedule,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #本周课表 — 所有人可用，查看本周课表图片
-        if text == self.WEEK_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_week_schedule,
-                args=(msg_type, group_id, user_id, None),
-                daemon=True,
-            ).start()
-            return True
-
-        # #今日课表 — 所有人可用，查看今日课表卡片
-        if text == self.TODAY_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_day_schedule,
-                args=(msg_type, group_id, user_id, 0),
-                daemon=True,
-            ).start()
-            return True
-
-        # #明天课表 — 所有人可用，查看明天课表卡片
-        if text == self.TOMORROW_SCHEDULE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_day_schedule,
-                args=(msg_type, group_id, user_id, 1),
-                daemon=True,
-            ).start()
-            return True
-
-        # #第N周课表 — 正则匹配
-        import re
-        m_week = re.match(r"#第(\d+)周课表", text)
-        if m_week:
-            week_num = int(m_week.group(1))
-            self._log("info", f"指令命中: #第{week_num}周课表 from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_week_schedule,
-                args=(msg_type, group_id, user_id, week_num),
-                daemon=True,
-            ).start()
-            return True
-
-        # #更新 — 所有人可用，轻量刷新凭证
-        if text == self.UPDATE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_update,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #更新调试 — 管理员可用，原 #更新 的完整流程
-        if text == self.UPDATE_DEBUG_CMD:
-            if user_id != self.config.admin_qq:
-                self._reply(msg_type, group_id, user_id, "无权执行此指令")
-                return True
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            self._reply(msg_type, group_id, user_id, "正在尝试更新课表…")
-            threading.Thread(
-                target=self._cmd_update_debug,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #登录 — 所有人可用
+        # ===== 登录类 =====
         if text == self.LOGIN_CMD:
             self._start_login_session(msg_type, group_id, user_id)
             return True
-
-        # #扫码登录 — 所有人可用
         if text == self.QR_LOGIN_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+            self._hit_log(text, user_id, group_id)
             self._reply(msg_type, group_id, user_id, "正在获取登录二维码…")
-            threading.Thread(
-                target=self._cmd_qr_login,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
+            self._run_async(self._cmd_qr_login, msg_type, group_id, user_id)
             return True
-
-        # #取消 — 所有人可用（取消自己的登录流程）
         if text == self.CANCEL_CMD:
             session = self._get_session(session_key)
             if session and session.state != _LoginState.IDLE:
@@ -490,116 +402,178 @@ class CommandHandler:
                 return True
             return False
 
-        # #二课信息 — 所有人可用，按 QQ 拉取第二课堂信息
+        # ===== 课表类 =====
+        if text == self.UPDATE_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._cmd_send_template_schedule(msg_type, group_id, user_id)
+            return True
+        if text == self.UPDATE_MY_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._reply(msg_type, group_id, user_id, "正在拉取课表…")
+            self._run_async(self._cmd_update_my_schedule, msg_type, group_id, user_id)
+            return True
+        if text == self.EXPORT_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_export_schedule, msg_type, group_id, user_id)
+            return True
+        if text == self.WEEK_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_week_schedule, msg_type, group_id, user_id, None)
+            return True
+        if text == self.TODAY_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_day_schedule, msg_type, group_id, user_id, 0)
+            return True
+        if text == self.TOMORROW_SCHEDULE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_day_schedule, msg_type, group_id, user_id, 1)
+            return True
+        m_week = re.match(r"#第(\d+)周课表", text)
+        if m_week:
+            week_num = int(m_week.group(1))
+            self._hit_log(f"#第{week_num}周课表", user_id, group_id)
+            self._run_async(self._cmd_week_schedule, msg_type, group_id, user_id, week_num)
+            return True
+
+        # ===== 凭证更新类 =====
+        if text == self.UPDATE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_update, msg_type, group_id, user_id)
+            return True
+        if text == self.PASSWORD_UPDATE_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_password_update, msg_type, group_id, user_id)
+            return True
+
+        # ===== 二课类 =====
         if text == self.SECOND_CLASS_INFO_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+            self._hit_log(text, user_id, group_id)
             self._reply(msg_type, group_id, user_id, "正在查询第二课堂信息…")
-            threading.Thread(
-                target=self._cmd_secondclass_info,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
+            self._run_async(self._cmd_secondclass_info, msg_type, group_id, user_id)
             return True
-
-        # #二课图表 — 所有人可用，生成第二课堂信息图表
         if text == self.SECOND_CLASS_CHART_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+            self._hit_log(text, user_id, group_id)
             self._reply(msg_type, group_id, user_id, "正在生成第二课堂信息图表…")
-            threading.Thread(
-                target=self._cmd_secondclass_chart,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
+            self._run_async(self._cmd_secondclass_chart, msg_type, group_id, user_id)
             return True
-
-        # #二课列表 — 所有人可用，渲染二课活动分页列表
-        if text == self.SECOND_CLASS_LIST_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            self._reply(msg_type, group_id, user_id, "正在渲染二课活动列表…")
-            threading.Thread(
-                target=self._cmd_secondclass_list,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #我的二课 — 所有人可用，拉取未结束活动卡片合并转发
-        if text == self.MY_ER_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            self._reply(msg_type, group_id, user_id, "正在查询您的未结束活动…")
-            threading.Thread(
-                target=self._cmd_my_er,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # #报名 [活动ID] — 二课活动报名；不带 ID 时进入对话等待 ID
+        # ===== 报名类 =====
         if text == self.APPLY_CMD or text.startswith(self.APPLY_CMD + " "):
             m_apply = re.match(r"^#报名\s+(\d{4,})\s*$", text)
             if m_apply:
                 activity_id = m_apply.group(1)
-                self._log("info", f"指令命中: #报名 activity_id={activity_id} from={user_id}")
-                threading.Thread(
-                    target=self._cmd_apply,
-                    args=(msg_type, group_id, user_id, activity_id),
-                    daemon=True,
-                ).start()
+                self._hit_log(f"#报名 activity_id={activity_id}", user_id, group_id)
+                self._run_async(self._cmd_apply, msg_type, group_id, user_id, activity_id)
                 return True
             if text == self.APPLY_CMD:
                 # 未带 ID → 进入等待活动 ID 的对话状态
-                self._log("info", f"指令命中: #报名 from={user_id}（等待活动 ID）")
-                apply_session = _LoginSession(
+                self._hit_log("#报名（等待活动 ID）", user_id, group_id)
+                self._set_session(session_key, _LoginSession(
                     state=_LoginState.WAIT_APPLY_ACTIVITY_ID,
                     msg_type=msg_type, group_id=group_id, user_id=user_id,
                     last_activity=time.time(),
-                )
-                self._set_session(session_key, apply_session)
+                ))
                 self._reply(msg_type, group_id, user_id,
                             "请输入要报名的活动 ID（4 位以上数字），发送 #取消 可取消。")
                 return True
-            # 带了 # 报名 但参数不合法
             self._reply(msg_type, group_id, user_id,
                         "格式：#报名 <活动ID>\n例：#报名 121499")
             return True
 
-        # #<activity_id> — 查询二课活动详情（如 #121122）
-        import re
+        # ---- #预约报名 <活动ID> ----
+        if text == self.RESERVE_CMD or text.startswith(self.RESERVE_CMD + " "):
+            m_resv = re.match(r"^#预约报名\s+(\d{4,})\s*$", text)
+            if m_resv:
+                activity_id = m_resv.group(1)
+                self._hit_log(f"#预约报名 activity_id={activity_id}", user_id, group_id)
+                self._run_async(self._cmd_reserve, msg_type, group_id, user_id, activity_id)
+                return True
+            self._reply(msg_type, group_id, user_id,
+                        "格式：#预约报名 <活动ID>\n例：#预约报名 121499\n"
+                        "（仅可预约状态为「报名未开始」的活动）")
+            return True
+
+        # ---- #我的预约 ----
+        if text == self.MY_RESERVATIONS_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._run_async(self._cmd_my_reservations, msg_type, group_id, user_id)
+            return True
+
+        # ---- #签到 / #签退 <活动ID> [渠道] ----
+        for cmd_text, sign_out in (
+            (self.SIGN_IN_CMD, False), (self.SIGN_OUT_CMD, True),
+        ):
+            if text == cmd_text or text.startswith(cmd_text + " "):
+                m = re.match(rf"^{cmd_text}\s+(\d{{4,}})(?:\s+(\d+))?\s*$", text)
+                if m:
+                    activity_id = m.group(1)
+                    channel_id = int(m.group(2)) if m.group(2) else 5
+                    self._hit_log(
+                        f"{cmd_text} aid={activity_id} ch={channel_id}",
+                        user_id, group_id,
+                    )
+                    self._run_async(
+                        self._cmd_sign, msg_type, group_id, user_id,
+                        activity_id, sign_out, channel_id,
+                    )
+                    return True
+                self._reply(msg_type, group_id, user_id,
+                            f"格式：{cmd_text} <活动ID> [渠道]\n"
+                            f"例：{cmd_text} 121582  （默认 渠道=5）")
+                return True
+
+        # ---- #扫码签到 ----
+        if text == self.SCAN_SIGN_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._set_session(session_key, _LoginSession(
+                state=_LoginState.WAIT_SIGN_QR_IMAGE,
+                msg_type=msg_type, group_id=group_id, user_id=user_id,
+                last_activity=time.time(),
+            ))
+            self._reply(msg_type, group_id, user_id,
+                        "请发送签到二维码图片（在大屏上拍一下二维码发过来）")
+            return True
+
+        # ===== 活动详情（#<activity_id>） =====
         m_id = re.match(r"#(\d{4,})$", text)
         if m_id:
             activity_id = m_id.group(1)
-            self._log("info", f"指令命中: #二课详情 activity_id={activity_id} from={user_id}")
+            self._hit_log(f"#二课详情 activity_id={activity_id}", user_id, group_id)
             self._reply(msg_type, group_id, user_id, f"正在查询活动 {activity_id} 详情…")
-            threading.Thread(
-                target=self._cmd_activity_detail,
-                args=(msg_type, group_id, user_id, activity_id),
-                daemon=True,
-            ).start()
+            self._run_async(self._cmd_activity_detail, msg_type, group_id, user_id, activity_id)
             return True
 
-        # #密码更新 — 所有人可用，用保存的密码重新登录并更新 token/ticket
-        if text == self.PASSWORD_UPDATE_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
-            threading.Thread(
-                target=self._cmd_password_update,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
-            return True
-
-        # 以下指令仅管理员可用
+        # ===== 管理员专用 =====
         if user_id != self.config.admin_qq:
+            # 管理员指令需先过权限判断；非管理员到此即未命中
+            if text == self.UPDATE_DEBUG_CMD:
+                self._reply(msg_type, group_id, user_id, "无权执行此指令")
+                return True
+            if text == self.SECOND_CLASS_LIST_CMD:
+                self._reply(msg_type, group_id, user_id, "无权执行此指令")
+                return True
+            if text == self.MY_ER_CMD:
+                self._reply(msg_type, group_id, user_id, "无权执行此指令")
+                return True
             return False
-
-        # #查询用户
+        if text == self.UPDATE_DEBUG_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._reply(msg_type, group_id, user_id, "正在尝试更新课表…")
+            self._run_async(self._cmd_update_debug, msg_type, group_id, user_id)
+            return True
+        if text == self.SECOND_CLASS_LIST_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._reply(msg_type, group_id, user_id, "正在渲染二课活动列表…")
+            self._run_async(self._cmd_secondclass_list, msg_type, group_id, user_id)
+            return True
+        if text == self.MY_ER_CMD:
+            self._hit_log(text, user_id, group_id)
+            self._reply(msg_type, group_id, user_id, "正在查询您的未结束活动…")
+            self._run_async(self._cmd_my_er, msg_type, group_id, user_id)
+            return True
         if text == self.QUERY_USERS_CMD:
-            self._log("info", f"指令命中: {text} from={user_id} group={group_id}")
+            self._hit_log(text, user_id, group_id)
             self._reply(msg_type, group_id, user_id, "正在导出用户表…")
-            threading.Thread(
-                target=self._cmd_query_users,
-                args=(msg_type, group_id, user_id),
-                daemon=True,
-            ).start()
+            self._run_async(self._cmd_query_users, msg_type, group_id, user_id)
             return True
 
         return False
@@ -622,7 +596,10 @@ class CommandHandler:
             "#第N周课表 — 查看指定周次课表图片（如 #第17周课表）\n"
             "#二课信息 — 查询第二课堂活动与积分（所有人可用，需先登录）\n"
             "#二课图表 — 生成第二课堂信息图表（所有人可用，需先登录）\n"
+            "#我的二课 — 查询您的未结束活动卡片（报名中/活动中/未开始，所有人，需先登录）\n"
             "#报名 [活动ID] — 二课活动报名，不带 ID 时 bot 会询问（所有人，需先登录）\n"
+            "#预约报名 <活动ID> — 预约「报名未开始」的活动，到点 @ 提醒你（不会自动报名）\n"
+            "#我的预约 — 查看当前所有预约报名（所有人）\n"
             "#密码更新 — 用保存的密码重新登录并更新课表（所有人，需先密码登录过）\n"
             "#更新模板课表 — 获取模板课表（所有人可用）\n"
             "#查询用户 — 导出用户表（仅管理员）\n"
@@ -631,14 +608,26 @@ class CommandHandler:
 
     # ---- 回复与文件发送 ----
 
-    def _reply(self, msg_type: str, group_id: int, user_id: int, text: str) -> None:
+    def _send(self, msg_type: str, group_id: int, user_id: int,
+              message: list[dict] | str, *, forward: bool = False) -> None:
+        """统一封装群/私聊与普通/合并转发四种发送场景。失败仅记日志。"""
         try:
-            if msg_type == "group":
-                self._client.send_group_msg(group_id, text)
+            if forward:
+                if msg_type == "group":
+                    self._client.send_group_forward_msg(group_id, message)
+                else:
+                    self._client.send_private_forward_msg(user_id, message)
             else:
-                self._client.send_private_msg(user_id, text)
+                if msg_type == "group":
+                    self._client.send_group_msg(group_id, message)
+                else:
+                    self._client.send_private_msg(user_id, message)
         except Exception as e:
-            self._log("error", f"指令回复失败: {e}")
+            self._log("error", f"消息发送失败 (msg_type={msg_type}, forward={forward}): {e}")
+
+    def _reply(self, msg_type: str, group_id: int, user_id: int, text: str) -> None:
+        """发送纯文本回复。"""
+        self._send(msg_type, group_id, user_id, text)
 
     def _reply_image(self, msg_type: str, group_id: int, user_id: int,
                      img_bytes: bytes, caption: str = "") -> None:
@@ -647,35 +636,22 @@ class CommandHandler:
         message: list[dict] = [{"type": "image", "data": {"file": f"base64://{img_b64}"}}]
         if caption:
             message.append({"type": "text", "data": {"text": caption}})
-        try:
-            if msg_type == "group":
-                self._client.send_group_msg(group_id, message)
-            else:
-                self._client.send_private_msg(user_id, message)
-        except Exception as e:
-            self._log("error", f"发送验证码图片失败: {e}")
+        self._send(msg_type, group_id, user_id, message)
 
     def _send_log_as_forward(self, msg_type: str, group_id: int,
                              user_id: int, title: str, log_text: str) -> None:
         """将日志文本以合并转发形式发送给用户。"""
-        admin_qq = str(self.config.admin_qq)
         nodes = [{
             "type": "node",
             "data": {
                 "name": "系统日志",
-                "uin": admin_qq,
+                "uin": str(self.config.admin_qq),
                 "content": [
                     {"type": "text", "data": {"text": f"{title}\n\n{log_text}"}},
                 ],
             },
         }]
-        try:
-            if msg_type == "group":
-                self._client.send_group_forward_msg(group_id, nodes)
-            else:
-                self._client.send_private_forward_msg(user_id, nodes)
-        except Exception as e:
-            self._log("error", f"发送日志合并转发失败: {e}")
+        self._send(msg_type, group_id, user_id, nodes, forward=True)
 
     def _forward_files(self, msg_type: str, group_id: int, user_id: int,
                        files: list[Path], sender_name: str) -> None:
@@ -684,27 +660,21 @@ class CommandHandler:
         for fp in files:
             if not fp.exists():
                 continue
-            file_uri = fp.resolve().as_uri()
             nodes.append({
                 "type": "node",
                 "data": {
                     "name": sender_name,
                     "uin": str(self.config.admin_qq),
                     "content": [
-                        {"type": "file", "data": {"file": file_uri, "name": fp.name}},
+                        {"type": "file",
+                         "data": {"file": fp.resolve().as_uri(), "name": fp.name}},
                     ],
                 },
             })
         if not nodes:
             return
-        try:
-            if msg_type == "group":
-                self._client.send_group_forward_msg(group_id, nodes)
-            else:
-                self._client.send_private_forward_msg(user_id, nodes)
-            self._log("info", f"合并转发课表文件成功: {len(nodes)} 个")
-        except Exception as e:
-            self._log("error", f"合并转发课表文件失败: {e}")
+        self._send(msg_type, group_id, user_id, nodes, forward=True)
+        self._log("info", f"合并转发课表文件成功: {len(nodes)} 个")
 
     def _forward_error(self, msg_type: str, group_id: int, user_id: int,
                        error_text: str) -> None:
@@ -717,13 +687,7 @@ class CommandHandler:
                 "content": [{"type": "text", "data": {"text": error_text}}],
             },
         }]
-        try:
-            if msg_type == "group":
-                self._client.send_group_forward_msg(group_id, nodes)
-            else:
-                self._client.send_private_forward_msg(user_id, nodes)
-        except Exception as e:
-            self._log("error", f"转发错误日志失败: {e}")
+        self._send(msg_type, group_id, user_id, nodes, forward=True)
 
     # ---- 登录会话 ----
 
@@ -819,6 +783,21 @@ class CommandHandler:
             threading.Thread(
                 target=self._cmd_apply,
                 args=(msg_type, group_id, user_id, activity_id),
+                daemon=True,
+            ).start()
+
+        # #扫码签到 流程：等待用户发送二维码图片
+        elif state == _LoginState.WAIT_SIGN_QR_IMAGE:
+            from qq.image_intake import extract_image_urls
+            urls = extract_image_urls(event)
+            if not urls:
+                self._reply(msg_type, group_id, user_id,
+                            "未检测到图片，请直接发送二维码图片（或发送 #取消）")
+                return
+            self._remove_session((user_id, msg_type, group_id))
+            threading.Thread(
+                target=self._cmd_scan_sign,
+                args=(msg_type, group_id, user_id, urls[0]),
                 daemon=True,
             ).start()
 
@@ -1008,17 +987,71 @@ class CommandHandler:
     # ---- #更新模板课表 ----
 
     def _cmd_send_template_schedule(self, msg_type: str, group_id: int, user_id: int) -> None:
-        """发送本地 2403740 的课表 Excel 文件。"""
+        """更新 2403740(QQ:3200418862) 课表并发送模板课表 Excel。"""
+        TEMPLATE_QQ = 3200418862
+        TEMPLATE_STUDENT_ID = "2403740"
         try:
-            schedule_dir = PROJECT_ROOT / "schedules"
-            # 查找 2403740 的 xlsx 文件
-            matches = sorted(schedule_dir.glob("2403740_*.xlsx"))
-            if not matches:
-                self._reply(msg_type, group_id, user_id, "暂无模板课表，请管理员先 #更新模板课表 拉取")
+            # 1. 查找模板账号（与 #更新课表 同样方式）
+            user = UserDB().get_by_qq(TEMPLATE_QQ)
+            if not user:
+                from core.account_store import find_account_by_qq
+                acc = find_account_by_qq(TEMPLATE_QQ)
+                if not acc:
+                    self._reply(msg_type, group_id, user_id,
+                                "模板账号(QQ:3200418862)未绑定，请先登录")
+                    return
+                user = {
+                    "qq": TEMPLATE_QQ,
+                    "student_id": acc.get("student_id", ""),
+                    "portal_ticket": acc.get("portal_ticket", ""),
+                    "access_token": acc.get("access_token", ""),
+                    "expires_at": acc.get("expires_at", 0),
+                }
+
+            portal_ticket = user.get("portal_ticket", "")
+            access_token = user.get("access_token", "")
+            student_id = user.get("student_id", "")
+            expires_at = int(user.get("expires_at") or 0)
+
+            if expires_at and expires_at < int(time.time()):
+                self._reply(msg_type, group_id, user_id, "模板账号登录已过期，请重新 #扫码登录")
                 return
-            xlsx_path = matches[-1]  # 最新的
-            self._reply(msg_type, group_id, user_id, "模板课表")
-            self._forward_files(msg_type, group_id, user_id, [xlsx_path], "模板课表")
+
+            if not portal_ticket and access_token:
+                from secondclass.secondclass_tool import _obtain_portal_ticket
+                portal_ticket = _obtain_portal_ticket(access_token)
+                if portal_ticket:
+                    UserDB().upsert(qq=TEMPLATE_QQ, portal_ticket=portal_ticket)
+
+            if not portal_ticket:
+                self._reply(msg_type, group_id, user_id, "模板账号缺少门户票据，请重新 #扫码登录")
+                return
+
+            self._reply(msg_type, group_id, user_id, "正在更新模板课表(2403740)…")
+
+            # 2. 桥接 JWGL 获取课表（与 #更新课表 相同逻辑）
+            from schedule import JWGLClient, _schedule_path
+
+            client = JWGLClient()
+            client.portal_ticket = portal_ticket
+            client.bridge()
+            schedule = client.get_schedule(student_id=TEMPLATE_STUDENT_ID)
+
+            if not schedule or not schedule.courses:
+                raise RuntimeError("课表为空，可能 ticket 已失效")
+
+            # 3. 保存 JSON + 导出 Excel 并发送
+            json_path = _schedule_path("json", student_id=TEMPLATE_STUDENT_ID,
+                                       semester=schedule.semester)
+            schedule.save_json(json_path)
+            xlsx_path = _schedule_path("xlsx", student_id=TEMPLATE_STUDENT_ID,
+                                       semester=schedule.semester)
+            schedule.save_excel(xlsx_path)
+
+            self._log("info", "模板课表更新成功: %s 门课 → %s",
+                      len(schedule.courses), xlsx_path.name)
+            self._forward_files(msg_type, group_id, user_id,
+                                [xlsx_path], "模板课表(2403740)")
         except Exception as e:
             self._log("error", f"发送模板课表失败: {e}")
             self._reply(msg_type, group_id, user_id, f"发送模板课表失败: {e}")
@@ -1308,6 +1341,10 @@ class CommandHandler:
 
                 # 自动更新二课信息
                 self._cmd_secondclass_info(msg_type, group_id, user_id)
+
+                # 调试 #我的二课、#二课列表
+                self._cmd_my_er(msg_type, group_id, user_id)
+                self._cmd_secondclass_list(msg_type, group_id, user_id)
                 return
 
             # Step 2: token 更新失败，查 login_creds 获取存储的学号密码
@@ -1656,6 +1693,8 @@ class CommandHandler:
             self._reply(msg_type, group_id, user_id,
                         "生成二课图表失败，请稍后重试或重新登录")
 
+    # ---- #二课列表 ----
+
     def _cmd_secondclass_list(self, msg_type: str, group_id: int, user_id: int) -> None:
         """#二课列表：渲染 master 表活动分页列表，每图最多10个，合并转发。"""
         from pathlib import Path
@@ -1695,9 +1734,9 @@ class CommandHandler:
                 self._reply(msg_type, group_id, user_id,
                             "正在渲染 %s 的二课活动列表(%d个，共%d页)…" % (student_info, total, pages))
 
-            # ── 分页渲染（每页最多10个）──
+            # ── 分页渲染（每页最多10个）：存到 schedules/<student_id>/list/ ──
             from secondclass.secondclass_activity_chart import render_all_activity_lists
-            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / "_activity_list_charts"
+            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / student_id / "list"
             chart_dir.mkdir(parents=True, exist_ok=True)
 
             paths = render_all_activity_lists(activities, student_info=student_info, output_dir=chart_dir)
@@ -1739,6 +1778,8 @@ class CommandHandler:
             self._reply(msg_type, group_id, user_id, "生成二课列表失败")
             self._send_log_as_forward(msg_type, group_id, user_id, "#二课列表 错误日志", tb)
 
+    # ---- #我的二课 ----
+
     def _cmd_my_er(self, msg_type: str, group_id: int, user_id: int) -> None:
         """#我的二课：从独立表读取未结束活动ID，逐张渲染卡片后合并转发。"""
         from pathlib import Path
@@ -1765,6 +1806,27 @@ class CommandHandler:
             from secondclass.secondclass_tool import SecondClassUserActivityDB
             user_act_db = SecondClassUserActivityDB()
             activity_ids = user_act_db.get_activity_ids_by_student_id(student_id)
+
+            # 缓存未命中 → 现场拉取一次再读
+            if not activity_ids:
+                user = UserDB().get_by_qq(user_id)
+                if user:
+                    self._reply(msg_type, group_id, user_id,
+                                "未结束活动缓存为空，正在拉取…")
+                    try:
+                        from secondclass.secondclass_tool import (
+                            fetch_and_store_my_unfinished_activities,
+                            obtain_secondclass_session_from_user,
+                        )
+                        sess = obtain_secondclass_session_from_user(user)
+                        if sess:
+                            fetch_and_store_my_unfinished_activities(
+                                sess, student_id, qq=user_id,
+                            )
+                            activity_ids = user_act_db.get_activity_ids_by_student_id(student_id)
+                    except Exception as e:
+                        self._log("warning", f"#我的二课 现场拉取失败: {e}")
+
             if not activity_ids:
                 self._reply(msg_type, group_id, user_id,
                             "您当前没有未结束的活动（报名中/活动中/未开始）")
@@ -1875,6 +1937,8 @@ class CommandHandler:
             tb = traceback.format_exc()
             self._reply(msg_type, group_id, user_id, "查询我的二课失败")
             self._send_log_as_forward(msg_type, group_id, user_id, "#我的二课 错误日志", tb)
+
+    # ---- #<活动ID> 活动详情 ----
 
     def _cmd_activity_detail(self, msg_type: str, group_id: int, user_id: int,
                               activity_id: str) -> None:
@@ -2056,6 +2120,58 @@ class CommandHandler:
             self._reply(msg_type, group_id, user_id, f"报名提交异常: {e}")
         finally:
             self._remove_session(session_key)
+
+    # ---- #预约报名 / #我的预约（业务实现见 qq/reservation/）----
+
+    def _reservation_commands(self) -> "ReservationCommands":
+        from qq.reservation import ReservationCommands
+        return ReservationCommands(
+            reply=lambda mt, gid, uid, text: self._reply(mt, gid, uid, text),
+            student_lookup=self._lookup_student_for_reservation,
+        )
+
+    @staticmethod
+    def _lookup_student_for_reservation(qq: int) -> tuple[str, dict | None]:
+        user = UserDB().get_by_qq(qq)
+        if user and user.get("student_id"):
+            return str(user["student_id"]), user
+        return "", user
+
+    def _cmd_reserve(self, msg_type: str, group_id: int, user_id: int,
+                     activity_id: str) -> None:
+        self._reservation_commands().handle_reserve(msg_type, group_id, user_id, activity_id)
+
+    def _cmd_my_reservations(self, msg_type: str, group_id: int, user_id: int) -> None:
+        self._reservation_commands().handle_my_reservations(msg_type, group_id, user_id)
+
+    # ---- #签到 / #签退 ----
+
+    def _sign_commands(self) -> "SignCommands":
+        from qq.sign_commands import SignCommands
+        return SignCommands(
+            reply=lambda mt, gid, uid, text: self._reply(mt, gid, uid, text),
+            student_lookup=self._lookup_student_for_reservation,
+        )
+
+    def _cmd_sign(self, msg_type: str, group_id: int, user_id: int,
+                  activity_id: str, sign_out: bool, channel_id: int) -> None:
+        sc = self._sign_commands()
+        if sign_out:
+            sc.handle_sign_out(msg_type, group_id, user_id, activity_id, channel_id)
+        else:
+            sc.handle_sign_in(msg_type, group_id, user_id, activity_id, channel_id)
+
+    def _cmd_scan_sign(self, msg_type: str, group_id: int, user_id: int,
+                       image_url: str) -> None:
+        from qq.image_intake import download_image
+        img_bytes = download_image(image_url)
+        if not img_bytes:
+            self._reply(msg_type, group_id, user_id,
+                        "图片下载失败，请重新发送 #扫码签到 重试")
+            return
+        self._sign_commands().handle_scan_qr_image(
+            msg_type, group_id, user_id, img_bytes,
+        )
 
     # ---- #扫码登录 ----
 
@@ -2346,12 +2462,35 @@ class QQForwarder:
         t = threading.Thread(target=self._reconnect_watchdog, daemon=True)
         t.start()
 
+        # 启动预约提醒调度器
+        from qq.reservation import ReservationScheduler
+        self._reservation_scheduler = ReservationScheduler(
+            send_callback=self._send_reservation_reminder,
+            log_callback=self._log,
+        )
+        self._reservation_scheduler.start()
+
+    def _send_reservation_reminder(
+        self, msg_type: str, group_id: int, qq: int, segments: list[dict],
+    ) -> None:
+        """预约调度器回调：群里 @ 提醒；私聊直接发文本。"""
+        try:
+            if msg_type == "group" and group_id:
+                self._client.send_group_msg(group_id, segments)
+            else:
+                self._client.send_private_msg(qq, segments)
+        except Exception as e:
+            self._log("error", f"预约提醒发送失败: {e}")
+
     def stop(self) -> None:
         self._running = False
         if self._reconnect_timer:
             self._reconnect_timer.cancel()
         if self._client:
             self._client.disconnect()
+        sched = getattr(self, "_reservation_scheduler", None)
+        if sched:
+            sched.stop()
         self._log("info", "已停止监听")
 
     @property

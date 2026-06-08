@@ -1,6 +1,6 @@
 # SSO Tools — 教务工具集开发者手册
 
-> **版本**: v1.6 | **最后更新**: 2026-06-07
+> **版本**: v1.9 | **最后更新**: 2026-06-07
 
 ---
 
@@ -20,11 +20,15 @@
 | QQ 转发（无头版） | 命令行版 QQ 监控转发 + #指令系统 | `qq/monitor_forward.py` |
 | 帮助图片 | 预渲染 #帮助 指令列表为静态图片 | `qq/help_image.py` |
 | 二课积分查询 | 积分、活动计数、分类积分查询 | `secondclass/secondclass_tool.py` |
-| 二课活动总表调度 | 自动定时拉取所有用户的活动总表 | `secondclass/secondclass_scheduler.py` |
+| 二课活动总表调度 | 自动定时拉取所有用户的活动总表（含 Tkinter 调度管理 GUI） | `secondclass/secondclass_scheduler.py` / `secondclass/secondclass_tool_gui.py` |
 | 二课信息图 | 二课数据可视化 PNG 信息图 | `secondclass/secondclass_image.py` |
 | 二课活动卡片 | 单个活动详情卡片 + 分页活动列表图 | `secondclass/secondclass_activity_chart.py` |
 | 二课活动报名 | 通过验证码自动完成二课活动报名 | `secondclass/secondclass_tool.py`（`fetch_apply_page()` + `submit_activity_apply()`） |
-| 二课自动积分 | 自动报名、签到、签退、提交总结的完整自动化工具 | `secondclass_auto_score.py` |
+| 二课自动积分（CLI） | 自动报名、签到、签退、提交总结的命令行自动化工具 | `secondclass_auto_score.py` |
+| 二课自动积分（GUI） | 二课自动积分 Tkinter 操作界面，含积分仪表盘、批量报名、活动监控 | `secondclass_auto_score_gui.py` |
+| 二课预约报名 | 预约「报名未开始」活动，到点 @ 提醒 | `qq/reservation/` 包 |
+| 二课扫码签到/签退 | 拍大屏二维码图片自动识别并提交签到/签退 | `qq/sign_commands.py` + `secondclass/qr_decode.py` |
+| 教室课表导出 | 教室课表 HTML 解析与 Excel 导出，支持周次选择 | `schedule/export_classroom_schedule.py` |
 | 抓包代理 | mitmproxy 代理抓取 SSO 登录参数 | `sso/sso_tool.py` |
 | 历史消息 | 群历史消息拉取与合并转发 | `qq/qq_history.py` |
 
@@ -230,6 +234,7 @@ python -m pytest tests/ -v
 | `WAITING_UPDATE_CAPTCHA` | 更新验证码 | `#更新` 流程重新登录 |
 | `WAITING_PASSWORD_UPDATE_CAPTCHA` | 密码更新验证码 | `#密码更新` 流程 |
 | `WAITING_APPLY_CAPTCHA` | 报名验证码 | `#报名` 流程输入活动报名验证码 |
+| `WAITING_SIGN_QR_IMAGE` | 扫码签到二维码 | `#扫码签到` 后等待用户发送大屏二维码图片 |
 
 - 会话 5 分钟无操作自动超时
 - 后台线程每 60 秒清理超时会话
@@ -447,6 +452,15 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 | `QQForwardBot` | 主类（消息处理、指令路由、转发） |
 | `UserDB` | users.db 的 users 表操作 |
 | `handle_command()` | 指令分发 |
+| `_run_async(target, *args)` | 统一后台线程启动（封装 `threading.Thread(daemon=True)`） |
+| `_hit_log(text, user_id, group_id)` | 统一"指令命中"日志记录 |
+
+**v1.7 重构要点**：
+- 指令路由从散乱的 `threading.Thread(...).start()` 改为集中使用 `_run_async()` 统一封装
+- 新增 `_hit_log()` 替代各指令分支中的 `self._log("info", f"指令命中: {text}...")`
+- 指令路由逻辑扁平化为分类式 if-else（登录类、课表类、二课类、管理员类）
+- `#登录` 指令改为同步调用 `_start_login_session()`
+- 管理员权限判断逻辑重构（先判定管理员指令，非管理员直接拒绝）
 
 > OneBot 底层连接使用 `core/onebot_client.OneBotClient`，消息回复工具使用 `core/command_utils`。
 
@@ -459,7 +473,14 @@ def save_excel(self, path: Path, week_start: int = 0, week_end: int = 0) -> None
 | 类/函数 | 说明 |
 |---------|------|
 | `MonitorForwarder` | 主类（WebSocket 连接、消息转发、自动重连） |
-| `CommandHandler` | #指令路由和执行 |
+| `CommandHandler` | #指令路由和执行（含 `simple_routes` 字典分发） |
+
+**v1.7 重构要点**：
+- 指令分发从逐个 `threading.Thread(...).start()` 改为集中式 `simple_routes` 字典 + `_cmd_*` 方法
+- `#帮助` 和 `#取消` 改为同步执行（不再启动后台线程）
+- `CMD_MY_ER` 指令修复：之前未注册到调度表，现已正确加入 `simple_routes`
+- 非线程指令（`#报名` 带参数 / `#刷新验证码` / 管理员指令等）保持原有异步逻辑
+- `import re` 移到文件顶部，函数内不再重复导入
 
 > OneBot 底层连接使用 `core/onebot_client.OneBotClient`，消息回复工具使用 `core/command_utils`。
 
@@ -931,6 +952,53 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 
 **状态文件**：`_temp/auto_score_state.json`，记录已处理的活动ID和最后扫描时间。
 
+### 4.22 `qq/reservation/` — 二课预约报名模块
+
+**职责**：独立的预约报名包，为 `#预约报名 <活动ID>` 和 `#我的预约` 提供后端支持。
+
+**结构**：
+
+| 文件 | 类/函数 | 职责 |
+|------|---------|------|
+| `qq/reservation/__init__.py` | — | 模块入口，暴露 `ReservationDB`、`ReservationScheduler`、`ReservationCommands`、`parse_apply_start` |
+| `qq/reservation/db.py` | `ReservationDB` | 存储层，复用 `second_class_users` 表的 `reserved_activity_ids` / `reservations_meta` 两列 |
+| `qq/reservation/commands.py` | `ReservationCommands` | 业务逻辑：`handle_reserve()` 和 `handle_my_reservations()` |
+| `qq/reservation/scheduler.py` | `ReservationScheduler` | 后台调度器，每 20 秒轮询，提前 1 分钟 + 到点各 @ 提醒一次；到点后自动移除预约 |
+| `qq/reservation/time_parser.py` | `parse_apply_start()` | 报名开始时间多格式解析（`"2026-06-08 10:00"`、`"06-08 10:00"`、范围格式） |
+
+**设计要点**：
+- 与具体 bot 框架解耦：通过构造函数注入 `reply` 和 `student_lookup` 回调
+- 到点提醒自动移除预约；提前 1 分钟提醒保留预约
+- `ReservationDB.get_all()` 被调度器轮询使用
+- 不支持自动报名（仅提醒），用户需自行发送 `#报名 <活动ID>`
+
+### 4.23 `qq/sign_commands.py` + `secondclass/qr_decode.py` — 扫码签到/签退模块
+
+**职责**：实现 `#扫码签到` / `#签退 <活动ID>` / `#签到 <活动ID>` 三个指令。
+
+**文件与类**：
+
+| 文件 | 类/函数 | 职责 |
+|------|---------|------|
+| `qq/sign_commands.py` | `SignCommands` | 签到/签退业务逻辑：`handle_sign_in()`、`handle_sign_out()`、`handle_scan_qr_image()`、`_do_sign()` |
+| `secondclass/qr_decode.py` | `decode_qr_image()` | 从图片字节解码二维码（依赖 `opencv-python-headless` + `numpy`） |
+| `secondclass/qr_decode.py` | `parse_sign_qr()` | 将 `signOnTV.html` URL 拆解为 `(activity_id, channel_id, rand, sign_out)` |
+
+**工作流（扫码签退）**：
+```
+用户发送 #扫码签到 → Bot 进入 WAITING_SIGN_QR_IMAGE 状态
+    ↓ 用户拍大屏二维码照片发过来
+Bot 用 opencv QRCodeDetector 解码
+    ↓
+解析 signOnTV URL → extract(activityID, channelID, rand, isSignOut)
+    ↓
+POST/GET signOnTV.html 提交签到/签退
+```
+
+**依赖**：`opencv-python-headless` + `numpy`（可选，仅在调用 `decode_qr_image` 时检查）
+
+**API 函数**：`secondclass/secondclass_tool.py` 中新增 `submit_sign(sess, activity_id, *, sign_out=False, channel_id=5, rand=None)` 供 `SignCommands` 调用。
+
 ---
 
 ## 五、#指令系统（QQ 转发）
@@ -939,8 +1007,8 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 
 | 处理器 | 所在文件 | 特点 |
 |--------|---------|------|
-| `CommandHandler` (GUI版) | `qq/qq_forward.py` (L260-557) | Tkinter 窗口版，主要用于管理员转发场景 |
-| `CommandHandler` (无头版) | `qq/monitor_forward.py` (L149-431) | 命令行无 GUI，面向普通 QQ 用户，指令更完整 |
+| `CommandHandler` (GUI版) | `qq/qq_forward.py` (v1.7 指令路由重构) | Tkinter 窗口版，主要用于管理员转发场景 |
+| `CommandHandler` (无头版) | `qq/monitor_forward.py` (v1.7 `simple_routes` 分发) | 命令行无 GUI，面向普通 QQ 用户，指令更完整 |
 
 **指令差异**：`monitor_forward.py` 无头版额外支持 `#查看二课`、`#报名 <活动ID>`、`#刷新验证码` 三个用户交互指令。
 
@@ -965,10 +1033,15 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 | `#密码更新` | 已绑定 | ✅ | ✅ | 用保存密码重新登录，刷新 token/ticket |
 | `#二课信息` | 已绑定 | ✅ | ✅ | 查询二课活动与积分 + 生成信息图 |
 | `#二课图表` | 已绑定 | ✅ | ✅ | 从 DB 缓存读取数据，渲染信息图表 |
-| `#二课列表` | 已绑定 | ✅ | ✅ | 渲染活动分页列表图（每图最多10个） |
-| `#查看二课` | 已绑定 | ❌ | ✅ | 渲染全部活动的详情卡片并逐张发送 |
-| `#我的二课` | 已绑定 | ✅ | ✅ | 查询用户未结束活动（报名中/活动中/未开始），渲染卡片合并转发 |
+| `#二课列表` | **管理员** | ✅ | ✅ | 渲染活动分页列表图（每图最多10个） |
+| `#查看二课` | **管理员** | ❌ | ✅ | 渲染全部活动的详情卡片并逐张发送 |
+| `#我的二课` | **管理员** | ✅ | ✅ | 查询用户未结束活动（报名中/活动中/未开始），渲染卡片合并转发 |
 | `#报名 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动报名，交互流程：自动获取验证码 → 用户输入 → 提交报名 |
+| `#签到 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动签到（同 signOnTV 端点，channelID=5） |
+| `#签退 <活动ID>` | 已绑定 | ❌ | ✅ | 二课活动签退（同 signOnTV 端点，channelID=5） |
+| `#预约报名 <活动ID>` | 已绑定 | ✅ | ✅ | 预约「报名未开始」的活动，到点 @ 提醒 |
+| `#我的预约` | 已绑定 | ✅ | ✅ | 查看当前所有预约报名 |
+| `#扫码签到` | 已绑定 | ✅ | ✅ | 发送指令后，拍大屏二维码图片发过来自动签到/签退 |
 | `#<活动ID>` | 已绑定 | ✅ | ✅ | 查询二课活动详情（从 DB 渲染卡片图片） |
 | `#查询用户` | 管理员 | ✅ | ✅ | 读取 `accounts.json` → 导出用户信息 Excel 并合并转发 |
 
@@ -981,7 +1054,7 @@ SSID=e8f3a1b2c4d5a6b7c8d9e0f1a2b3c4d5
 | 基本指令 | `#帮助`, `#扫码登录`, `#登录`, `#取消` |
 | 课表相关 | `#更新课表`, `#本周课表`, `#今日课表`, `#明天课表`, `#第N周课表`, `#导出课表`, `#更新模板课表` |
 | 凭证与更新 | `#更新`, `#密码更新` |
-| 第二课堂 | `#二课信息`, `#二课图表`, `#二课列表`, `#查看二课`, `#我的二课`, `#报名 <活动ID>` |
+| 第二课堂 | `#二课信息`, `#二课图表`, `#二课列表`, `#查看二课`, `#我的二课`, `#报名 <活动ID>`, `#签到 <活动ID>`, `#签退 <活动ID>`, `#预约报名 <活动ID>`, `#我的预约`, `#扫码签到` |
 | 管理员指令 | `#更新调试`, `#查询用户` |
 
 ### 5.4 工作流详解
@@ -1097,7 +1170,7 @@ stateDiagram-v2
 
 ### 6.1 数据库文件
 
-`users.db` — SQLite 数据库，包含 6 张表。
+`users.db` — SQLite 数据库，包含 7 张表。
 
 ### 6.2 `users` 表 — QQ ↔ SSO 账号绑定
 
@@ -1235,7 +1308,24 @@ stateDiagram-v2
 | `activity_time` | TEXT | `''` | 活动时间范围 |
 | `fetched_at` | TEXT | `''` | 抓取时间 |
 
+### 6.8 `second_class_users` 表 — 二课用户活动与预约
+
+> 主键: `(qq)` | 唯一索引: `(student_id)`
+
+由 `SecondClassUserActivityDB` 创建/维护，`ReservationDB` 读写 `reserved_*` 两列。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `qq` | INTEGER PK | — | QQ 号（主键） |
+| `student_id` | TEXT NOT NULL UNIQUE | — | 学号 |
+| `unfinished_activity_ids` | TEXT | `''` | 逗号分隔的未结束活动ID（报名中+活动中+未开始） |
+| `reserved_activity_ids` | TEXT | `''` | **预约报名**的逗号分隔活动ID |
+| `reservations_meta` | TEXT | `'{}'` | **预约报名**元数据 JSON：`{activity_id: {name, apply_start, notified, ...}}` |
+| `updated_at` | TEXT | `''` | 更新时间 |
+
 ---
+
+
 
 ## 七、SSO 登录关键参数
 
@@ -1662,7 +1752,111 @@ if "未开始" in status:
 | 签退 | `/Student/Activity/signOut.html`, `qiantui.html`, `/Student/My/signOut.html`, `activitySignOut.html` |
 | 提交总结 | `/Student/My/myActivitySummary.html`, `/Student/Activity/submitSummary.html`, `/Student/My/summary.html` |
 
+### 9.7 签到/签退接口（`signOnTV`）
+
+签到与签退共用同一个 Admin 端投屏页面，通过 `isSignOut` 参数区分模式。
+
+**接口地址**：
+
+| 项目 | 值 |
+|------|-----|
+| URL | `/Admin/Index/signOnTV.html` |
+| 方法 | GET |
+| 认证 | Cookie: `SSID=xxx`（学生端携带 SSID 即可调用此 Admin 端点） |
+
+**请求参数**：
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `activityID` | 是 | 活动 ID |
+| `channelID` | 是 | 渠道 ID（二维码场景通常为 `5`） |
+| `rand` | 是 | 一次性随机数/token（扫码场景必须传二维码里解出的真值） |
+| `isSignOut` | 是 | `0`=签到，`1`=签退 |
+
+**代码函数**（`secondclass/secondclass_tool.py`）：
+
+```python
+def submit_sign(sess, activity_id, *, sign_out=False, channel_id=5, rand=None) -> dict:
+    """二课签到 / 签退（共用 Admin/Index/signOnTV.html）。
+
+    Args:
+        sess: 已认证的 requests.Session（含 SSID cookie）。
+        activity_id: 活动 ID。
+        sign_out: True=签退，False=签到。
+        channel_id: 渠道（大屏渠道默认 5）。
+        rand: 二维码中的 rand token（必须传真值，随机数可能被服务器拒绝）。
+
+    Returns:
+        {"success": bool, "message": str, "raw": <原始响应文本或dict>}
+
+    Raises:
+        ActivitySignError: HTTP 异常或服务器返回明确失败。
+        SecondClassAuthError: SSID 失效（302→登录页）。
+    """
+```
+
+**响应处理**：
+- `200` + JSON → 直接解析
+- `200` + HTML → 含 `"成功"` 关键词视为成功
+- `301/302` → 检查是否重定向到登录页（会话过期）
+
+**常量**：
+```python
+SIGN_ON_TV_URL = "https://2class.cqtbi.edu.cn/Admin/Index/signOnTV.html"
+```
+
+### 9.8 二维码签到/签退流程
+
+```mermaid
+sequenceDiagram
+    participant User as 用户(QQ)
+    participant Bot as QQ 转发
+    participant QR as 二课大屏二维码
+    participant SClass as 二课系统
+
+    User->>Bot: #扫码签到
+    Bot->>User: 进入 WAITING_SIGN_QR_IMAGE 状态<br/>请拍摄大屏二维码
+    User->>Bot: [发送大屏二维码图片]
+    Bot->>Bot: cv2.QRCodeDetector 解码
+    Bot->>Bot: parse_sign_qr() 解析 URL
+    Note over Bot: 提取 activityID, channelID, rand, isSignOut
+    Bot->>SClass: GET /Admin/Index/signOnTV.html?activityID=xxx&channelID=5&rand=xxx&isSignOut=1
+    SClass-->>Bot: {"success": true, "message": "签退成功"}
+    Bot->>User: ✅ 活动 xxxx 签退成功
+
+    Note over User,Bot: 支持文本指令 #签到 <ID> / #签退 <ID><br/>直接提交无需扫码
+```
+
+### 9.9 预约报名流程
+
+```mermaid
+sequenceDiagram
+    participant User as 用户(QQ)
+    participant Bot as QQ 转发
+    participant DB as ReservationDB<br/>(second_class_users)
+    participant SClass as 二课系统
+
+    User->>Bot: #预约报名 121582
+    Bot->>Bot: 查 master_v2 / detail_v3 获取报名开始时间
+    Bot->>SClass: (若缓存缺失) API 确认活动状态
+    SClass-->>Bot: 报名未开始 ✓
+    Bot->>DB: add(qq, student_id, activity_id, meta)
+    DB-->>Bot: 已存储
+    Bot->>User: ✅ 预约成功：《活动名》<br/>报名开始：2026-06-08 10:00
+
+    Note over Bot,DB: ReservationScheduler 每20秒轮询
+
+    alt 提前1分钟
+        Bot->>User: @你 活动将于 06-08 09:59 开放报名
+    else 到点
+        Bot->>User: @你 报名已开始，发送 #报名 121582
+        Bot->>DB: 自动移除该预约
+    end
+```
+
 ---
+
+
 
 ## 十、附录 — 代码风格
 
@@ -1707,6 +1901,7 @@ if "未开始" in status:
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v1.9 | 2026-06-07 | 新增 `qq/reservation/` 预约报名模块文档（§4.22）：ReservationDB、ReservationScheduler、ReservationCommands、time_parser；新增 `qq/sign_commands.py` + `secondclass/qr_decode.py` 扫码签到模块文档（§4.23）：SignCommands、decode_qr_image、parse_sign_qr；新增 §9.7 signOnTV 签到/签退 API 接口文档 + §9.8 二维码签到流程 + §9.9 预约报名流程；新增 #签到、#签退、#预约报名、#我的预约、#扫码签到 五个指令（§5）；新增 §6.8 second_class_users 表文档（含 reserved_activity_ids、reservations_meta 预约字段）；会话状态新增 WAITING_SIGN_QR_IMAGE |
 | v1.6 | 2026-06-07 | 新增 `second_class_user_activities` 表（仅存 qq/student_id/activity_id），记录用户未结束活动（报名中+活动中+未开始）；新增 `SecondClassUserActivityDB` 类与 `fetch_and_store_my_unfinished_activities()` 函数；`fetch_and_store_master_data()` 移除 Step2（我的活动不再写入 master 表），改为调度器中独立拉取新表；更新数据流全景图与 DB 表结构文档 |
 | v1.5 | 2026-06-07 | 新增 §4.15.1 活动总表（`second_class_master_v2`）录入逻辑与数据流文档（含 `fetch_and_store_master_data()` 四步流程、`fetch_activities_can_apply()`、`fetch_all_my_activities()` 详解、`upsert_activities()` 写入逻辑）；新增 §4.15.2 活动详情表（`second_class_activity_detail_v3`）录入逻辑与数据流文档（含三层解析策略、`_LABEL_FIELD_MAP` 标签→字段映射表、3 个写入入口）；新增 §4.15.3 数据流全景图（mermaid 流程图）；更新 §4.16 调度器文档，补充详情拉取参数和限制说明 |
 | v1.4 | 2026-06-05 | 新增 `schedule/jwgl_client.py` JWGL 教务系统客户端（从 schedule_tool 重构提取，新增成绩查询 `get_grades()`）；新增 `secondclass_auto_score.py` 二课自动积分工具（status/signup/probe/summary/monitor/run 6大子命令，含 ddddocr 验证码识别）；新增 `sso_to_ssid.py` SSID 转换工具及 `convert_to_ssid()` 函数；新增凭证转换链文档 §7.5（含转换流程图、存储位置表、函数映射表、凭证层级图）；新增成绩查询 API 文档（`cqtbi-api.md` §3.3）；新增二课自动积分 API 文档（`DEVELOPER.md` §9.6）；更新 4.1 核心功能表和模块编号 |
