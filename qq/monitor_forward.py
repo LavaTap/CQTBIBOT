@@ -54,6 +54,25 @@ def setup_logging() -> None:
 
 
 # ---------- 配置加载 ----------
+def _resolve_connection(data: dict) -> tuple[str, str]:
+    """从配置中解析出 ws_url 和 access_token，支持多连接格式。
+
+    新格式:
+      { "connections": { "main": {"ws_url": "...", "access_token": "..."} },
+        "default_connection": "main" }
+    旧格式（兼容）:
+      { "ws_url": "...", "access_token": "..." }
+    """
+    connections = data.get("connections")
+    if isinstance(connections, dict) and connections:
+        name = data.get("default_connection") or next(iter(connections))
+        conn = connections.get(name)
+        if conn:
+            return conn.get("ws_url", "ws://127.0.0.1:3001"), conn.get("access_token", "")
+    # 旧格式兼容
+    return data.get("ws_url", "ws://127.0.0.1:3001"), data.get("access_token", "")
+
+
 def load_config() -> dict:
     """从 forward_config.json 加载配置。"""
     if not CONFIG_FILE.exists():
@@ -61,9 +80,12 @@ def load_config() -> dict:
         sys.exit(1)
     try:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        ws_url, access_token = _resolve_connection(data)
         return {
-            "ws_url": data.get("ws_url", "ws://127.0.0.1:3001"),
-            "access_token": data.get("access_token", ""),
+            "ws_url": ws_url,
+            "access_token": access_token,
+            "connections": data.get("connections", {}),
+            "default_connection": data.get("default_connection", ""),
             "source_groups": data.get("source_groups", []),
             "target_groups": data.get("target_groups", []),
             "admin_qq": int(data.get("admin_qq", 0)),

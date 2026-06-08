@@ -44,11 +44,35 @@ def setup_logging() -> None:
 # ---------- 配置 ----------
 @dataclass
 class HistoryConfig:
+    """历史消息配置，支持多 WebSocket 连接。
+
+    connections 格式:
+        { "连接名": {"ws_url": "ws://...", "access_token": "..."} }
+    """
+    connections: dict = None
+    default_connection: str = ""
     ws_url: str = "ws://127.0.0.1:3001"
     access_token: str = ""
     source_group: int = 0
     target_group: int = 0
     count: int = 20
+
+    def __post_init__(self) -> None:
+        if self.connections is None:
+            self.connections = {}
+            if self.ws_url:
+                self.connections["main"] = {
+                    "ws_url": self.ws_url,
+                    "access_token": self.access_token,
+                }
+                self.default_connection = "main"
+
+    @property
+    def _current_conn(self) -> dict:
+        conn = self.connections.get(self.default_connection) if self.default_connection else None
+        if conn:
+            return conn
+        return {"ws_url": self.ws_url, "access_token": self.access_token}
 
     def save(self) -> None:
         CONFIG_FILE.write_text(
@@ -62,6 +86,21 @@ class HistoryConfig:
             return cls()
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            # 解析多连接格式
+            connections = data.get("connections")
+            if isinstance(connections, dict) and connections:
+                default_name = data.get("default_connection") or next(iter(connections))
+                conn = connections.get(default_name, {})
+                return cls(
+                    connections=connections,
+                    default_connection=default_name,
+                    ws_url=conn.get("ws_url", "ws://127.0.0.1:3001"),
+                    access_token=conn.get("access_token", ""),
+                    source_group=int(data.get("source_group", 0)),
+                    target_group=int(data.get("target_group", 0)),
+                    count=int(data.get("count", 20)),
+                )
+            # 旧格式兼容
             return cls(
                 ws_url=data.get("ws_url", "ws://127.0.0.1:3001"),
                 access_token=data.get("access_token", ""),
@@ -74,8 +113,13 @@ class HistoryConfig:
 
     def _to_dict(self) -> dict:
         return {
-            "ws_url": self.ws_url,
-            "access_token": self.access_token,
+            "connections": self.connections or {
+                self.default_connection or "main": {
+                    "ws_url": self.ws_url,
+                    "access_token": self.access_token,
+                }
+            },
+            "default_connection": self.default_connection or "main",
             "source_group": self.source_group,
             "target_group": self.target_group,
             "count": self.count,
@@ -257,6 +301,23 @@ class HistoryApp(tk.Tk):
         conn_frame = ttk.LabelFrame(self, text="NapCat 连接（WebSocket）")
         conn_frame.pack(fill="x", **pad)
 
+        # 连接选择器
+        row_sel = ttk.Frame(conn_frame)
+        row_sel.pack(fill="x", padx=6, pady=(4, 0))
+        ttk.Label(row_sel, text="连接:").pack(side="left")
+        self.conn_names = list(self.config.connections.keys()) or ["main"]
+        self.conn_var = tk.StringVar(value=self.config.default_connection or self.conn_names[0])
+        self.conn_combo = ttk.Combobox(
+            row_sel, textvariable=self.conn_var, values=self.conn_names,
+            state="readonly", width=18,
+        )
+        self.conn_combo.pack(side="left", padx=4)
+        self.conn_combo.bind("<<ComboboxSelected>>", self._on_conn_switch)
+        self.add_conn_btn = ttk.Button(row_sel, text="+", width=3, command=self._add_connection)
+        self.add_conn_btn.pack(side="left", padx=2)
+        self.del_conn_btn = ttk.Button(row_sel, text="-", width=3, command=self._del_connection)
+        self.del_conn_btn.pack(side="left", padx=2)
+
         row0 = ttk.Frame(conn_frame)
         row0.pack(fill="x", padx=6, pady=4)
         ttk.Label(row0, text="WS 地址:").pack(side="left")
@@ -331,9 +392,72 @@ class HistoryApp(tk.Tk):
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
 
+    # ======================== 连接管理 ========================
+
+    def _sync_conn_to_config(self) -> None:
+        """将当前 UI 的 ws_url/token 同步到 config.connections 中的当前连接。"""
+        name = self.conn_var.get()
+        if not name:
+            return
+        self.config.connections[name] = {
+            "ws_url": self.ws_var.get().strip(),
+            "access_token": self.token_var.get().strip(),
+        }
+        self.config.default_connection = name
+
+    def _refresh_conn_combo(self) -> None:
+        names = list(self.config.connections.keys())
+        self.conn_combo["values"] = names
+        if self.conn_var.get() not in names:
+            self.conn_var.set(names[0] if names else "main")
+
+    def _on_conn_switch(self, event=None) -> None:
+        old_name = self.config.default_connection
+        if old_name:
+            self.config.connections[old_name] = {
+                "ws_url": self.ws_var.get().strip(),
+                "access_token": self.token_var.get().strip(),
+            }
+        new_name = self.conn_var.get()
+        conn = self.config.connections.get(new_name, {})
+        self.config.default_connection = new_name
+        self.config.ws_url = conn.get("ws_url", "ws://127.0.0.1:3001")
+        self.config.access_token = conn.get("access_token", "")
+        self.ws_var.set(self.config.ws_url)
+        self.token_var.set(self.config.access_token)
+
+    def _add_connection(self) -> None:
+        import tkinter.simpledialog as sd
+        name = sd.askstring("新建连接", "请输入连接名称:", parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        if name in self.config.connections:
+            messagebox.showwarning("重复", f"连接名 '{name}' 已存在")
+            return
+        self.config.connections[name] = {
+            "ws_url": "ws://127.0.0.1:3001",
+            "access_token": "",
+        }
+        self.conn_var.set(name)
+        self._on_conn_switch()
+        self._refresh_conn_combo()
+
+    def _del_connection(self) -> None:
+        name = self.conn_var.get()
+        if len(self.config.connections) <= 1:
+            messagebox.showwarning("禁止删除", "至少保留一个连接")
+            return
+        if not messagebox.askyesno("确认删除", f"确定删除连接 '{name}'?"):
+            return
+        del self.config.connections[name]
+        new_name = next(iter(self.config.connections))
+        self.conn_var.set(new_name)
+        self._on_conn_switch()
+        self._refresh_conn_combo()
+
     def _save_config(self) -> None:
-        self.config.ws_url = self.ws_var.get().strip()
-        self.config.access_token = self.token_var.get().strip()
+        self._sync_conn_to_config()
         try:
             self.config.source_group = int(self.src_var.get().strip())
         except ValueError:

@@ -1,26 +1,24 @@
 """NapCat 监控/自动重启模块。
 
-独立于 OneBotClient 的 WS 监控客户端，专门检测 3001 端口 NapCat 实例的存活状态。
+独立于 OneBotClient 的 WS 监控客户端，专门检测指定端口 NapCat 实例的存活状态。
 当检测到掉线（WS 断开或心跳超时 65s），自动：
-  1. 用 netstat 查找 3001 端口对应的 PID
-  2. 只 kill 3001 的进程链（不动 3002）
+  1. 用 netstat 查找目标端口对应的 PID
+  2. kill 该进程链（不影响其他端口上的 NapCat）
   3. 重启 napcat.bat
-  4. 等待新二维码生成
-  5. 待主 OneBotClient 重连后，推送二维码给管理员
+
+注：仅负责重启，不再处理二维码。NapCat 重启后需手动扫码登录。
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
-import os
 import subprocess
 import threading
 import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
 
@@ -29,15 +27,10 @@ log = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NAPCAT_SHELL_DIR = PROJECT_ROOT / "NapCat.Shell.Windows.OneKey" / "NapCat.44498.Shell"
 NAPCAT_BAT = NAPCAT_SHELL_DIR / "napcat.bat"
-NAPCAT_QRCODE_PATH = (
-    NAPCAT_SHELL_DIR
-    / "versions" / "9.9.26-44498" / "resources" / "app" / "napcat" / "cache"
-    / "qrcode.png"
-)
 HEARTBEAT_TIMEOUT = 65  # heartInterval * 2 + 5 = 65s
 RESTART_COOLDOWN = 60   # 冷却秒数
-QR_WATCH_TIMEOUT = 90   # 等待二维码超时
-RECONNECT_WAIT = 30     # 等待主客户端重连超时
+CONNECT_BACKOFF_BASE = 5   # 连接失败首次退避
+CONNECT_BACKOFF_MAX = 60   # 退避上限
 
 State = str
 STATE_IDLE = "空闲"
@@ -57,17 +50,13 @@ class NapCatMonitor:
         *,
         ws_url: str,
         access_token: str,
-        admin_qq: int,
         log_cb: Callable[[str, str], None],
-        send_cb: Callable[[int, list[dict] | str], None],
         is_main_connected: Callable[[], bool],
-        on_state_change: Callable[[State], None] | None = None,
+        on_state_change: Callable[[str], None] | None = None,
     ) -> None:
         self._ws_url = ws_url
         self._access_token = access_token
-        self._admin_qq = admin_qq
         self._log = log_cb
-        self._send = send_cb
         self._is_main_connected = is_main_connected
         self._on_state_change = on_state_change
 
@@ -75,7 +64,10 @@ class NapCatMonitor:
         self._thread: threading.Thread | None = None
         self._last_heartbeat: float = 0.0
         self._last_restart_at: float = 0.0
-        self._state: State = STATE_IDLE
+        self._state: str = STATE_IDLE
+        self._established: bool = False  # 当前 WS 是否曾握手成功
+        self._connect_fail_count: int = 0  # 连续连接失败次数（用于退避）
+        self._target_port: int = self._parse_port(ws_url)
 
     # ── 公开方法 ──
 
@@ -98,17 +90,25 @@ class NapCatMonitor:
 
     # ── 状态管理 ──
 
-    def _set_state(self, s: State) -> None:
+    def _set_state(self, s: str) -> None:
         self._state = s
         if self._on_state_change:
             self._on_state_change(s)
+
+    @staticmethod
+    def _parse_port(ws_url: str) -> int:
+        """从 ws://host:port/... 解析端口，失败回退 3001。"""
+        try:
+            return urlparse(ws_url).port or 3001
+        except Exception:
+            return 3001
 
     # ── 主循环 ──
 
     def _run(self) -> None:
         import websocket as _ws
 
-        self._log("info", "NapCat 监控已启动")
+        self._log("info", f"NapCat 监控已启动（目标端口 {self._target_port}）")
         self._set_state(STATE_MONITORING)
 
         while not self._stop.is_set():
@@ -116,12 +116,23 @@ class NapCatMonitor:
                 self._monitor_loop()
             except Exception as e:
                 self._log("error", f"监控循环异常: {e}")
-            self._stop.wait(5)
+            # 连接失败用指数退避，避免疯狂刷屏
+            if not self._established and self._connect_fail_count > 0:
+                wait = min(
+                    CONNECT_BACKOFF_BASE * (2 ** (self._connect_fail_count - 1)),
+                    CONNECT_BACKOFF_MAX,
+                )
+            else:
+                wait = 5
+            self._stop.wait(wait)
 
         self._log("info", "NapCat 监控已停止")
 
     def _monitor_loop(self) -> None:
         import websocket as _ws
+
+        # 进入新的一次连接：重置 established 标志
+        self._established = False
 
         ws = _ws.WebSocketApp(
             self._ws_url,
@@ -144,9 +155,9 @@ class NapCatMonitor:
         )
         t.start()
 
-        # 主线程负责心跳超时检测
+        # 主线程负责心跳超时检测（仅在已建立连接后才有意义）
         while not self._stop.is_set() and (ws.sock and ws.sock.connected):
-            if time.time() - self._last_heartbeat > HEARTBEAT_TIMEOUT:
+            if self._established and time.time() - self._last_heartbeat > HEARTBEAT_TIMEOUT:
                 self._log("warn", f"心跳超时（{HEARTBEAT_TIMEOUT}s 无消息），判定掉线")
                 self._on_disconnected()
                 break
@@ -162,8 +173,10 @@ class NapCatMonitor:
     # ── WS 回调 ──
 
     def _on_ws_open(self, ws) -> None:
-        self._log("info", "监控 WS 已连接")
+        self._log("info", f"监控 WS 已连接（{self._ws_url}）")
         self._last_heartbeat = time.time()
+        self._established = True
+        self._connect_fail_count = 0
 
     def _on_ws_message(self, ws, raw: str) -> None:
         self._last_heartbeat = time.time()
@@ -176,11 +189,28 @@ class NapCatMonitor:
             return
 
     def _on_ws_close(self, ws, close_status_code, close_msg) -> None:
+        if self._stop.is_set():
+            return
+        if not self._established:
+            # 从未握手成功 —— 视为目标 NapCat 未启动 / 端口未开
+            self._connect_fail_count += 1
+            wait = min(
+                CONNECT_BACKOFF_BASE * (2 ** (self._connect_fail_count - 1)),
+                CONNECT_BACKOFF_MAX,
+            )
+            self._log(
+                "info",
+                f"监控目标未响应（第 {self._connect_fail_count} 次），{wait}s 后重试",
+            )
+            return
         self._log("warn", f"监控 WS 断开 (code={close_status_code})")
-        if not self._stop.is_set():
-            self._on_disconnected()
+        self._on_disconnected()
 
     def _on_ws_error(self, ws, error) -> None:
+        # 未握手前的 sock=None / 连接拒绝是常见噪音，降级到 debug
+        if not self._established:
+            log.debug("监控 WS 连接失败: %s", error)
+            return
         self._log("error", f"监控 WS 错误: {error}")
 
     # ── 掉线处理 ──
@@ -198,12 +228,9 @@ class NapCatMonitor:
     def _restart_flow(self) -> None:
         self._last_restart_at = time.time()
         try:
-            self._kill_3001_process()
+            self._kill_target_process()
             self._log("info", "等待进程清理完毕…")
             time.sleep(2)
-
-            # 删除旧二维码
-            self._delete_old_qrcode()
 
             # 启动 napcat.bat
             self._set_state(STATE_RESTARTING)
@@ -213,35 +240,24 @@ class NapCatMonitor:
                 cwd=str(NAPCAT_SHELL_DIR),
                 shell=True,
             )
-
-            # 等待二维码
-            self._set_state(STATE_WAITING_QR)
-            qr_path = self._wait_qrcode()
-            if not qr_path:
-                self._log("error", "等待二维码超时（90s），请手动重启 NapCat")
-                self._set_state(STATE_ERROR)
-                return
-
-            self._log("info", f"二维码已生成: {qr_path.name}")
-
-            # 等待主客户端重连后发送
-            self._set_state(STATE_QR_SENT)
-            self._send_qrcode(qr_path)
+            self._log("info", "NapCat 已重启，请手动扫码登录")
+            self._set_state(STATE_MONITORING)
 
         except Exception as e:
             self._log("error", f"重启流程异常: {e}")
             self._set_state(STATE_ERROR)
 
-    # ── 步骤 1: kill 3001 进程 ──
+    # ── 步骤 1: kill 监控目标端口对应的进程 ──
 
-    def _kill_3001_process(self) -> None:
-        """用 netstat 找 3001 端口的 PID，只 kill 那条进程链。"""
-        pid = self._find_pid_by_port(3001)
+    def _kill_target_process(self) -> None:
+        """用 netstat 找 target_port 对应的 PID，只 kill 那条进程链。"""
+        port = self._target_port
+        pid = self._find_pid_by_port(port)
         if not pid:
-            self._log("info", "3001 端口无 LISTENING 进程，无需 kill")
+            self._log("info", f"{port} 端口无 LISTENING 进程，无需 kill")
             return
 
-        self._log("info", f"3001 端口 PID={pid}，正在终止…")
+        self._log("info", f"{port} 端口 PID={pid}，正在终止…")
 
         # 先杀子进程，再杀父进程
         for flag in ("/T", ""):
@@ -264,7 +280,7 @@ class NapCatMonitor:
         except Exception:
             pass
 
-        self._log("info", "3001 进程已终止")
+        self._log("info", f"{port} 进程已终止")
 
     @staticmethod
     def _find_pid_by_port(port: int) -> int | None:
@@ -286,92 +302,5 @@ class NapCatMonitor:
             pass
         return None
 
-    # ── 步骤 2: 删除旧二维码 ──
+    # ── 步骤 2: 结束 ──
 
-    def _delete_old_qrcode(self) -> None:
-        qr = Path(NAPCAT_QRCODE_PATH)
-        if qr.exists():
-            try:
-                qr.unlink()
-                self._log("info", "已删除旧二维码")
-            except OSError as e:
-                self._log("warn", f"删除旧二维码失败: {e}")
-
-    # ── 步骤 3: 等待新二维码 ──
-
-    def _wait_qrcode(self) -> Path | None:
-        """用 watchdog 监听 cache 目录，等待 qrcode.png 被创建。"""
-        qr = Path(NAPCAT_QRCODE_PATH)
-        cache_dir = qr.parent
-
-        # 确保目录存在
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # 先检查是否已存在（NapCat 可能已生成）
-        if qr.exists():
-            return qr
-
-        try:
-            from watchdog.observers import Observer
-            from watchdog.events import FileSystemEventHandler
-        except ImportError:
-            self._log("error", "缺少 watchdog 库，请 pip install watchdog")
-            # 降级：轮询
-            return self._poll_qrcode(qr)
-
-        event = threading.Event()
-        qr_found: list[Path] = []
-
-        class _Handler(FileSystemEventHandler):
-            def on_created(self, ev):
-                if Path(ev.src_path).name == qr.name:
-                    qr_found.append(Path(ev.src_path))
-                    event.set()
-
-        observer = Observer()
-        observer.schedule(_Handler(), str(cache_dir), recursive=False)
-        observer.start()
-
-        try:
-            event.wait(timeout=QR_WATCH_TIMEOUT)
-        finally:
-            observer.stop()
-            observer.join(timeout=3)
-
-        return qr_found[0] if qr_found else None
-
-    def _poll_qrcode(self, qr: Path) -> Path | None:
-        """watchdog 不可用时的轮询降级方案。"""
-        deadline = time.time() + QR_WATCH_TIMEOUT
-        while time.time() < deadline and not self._stop.is_set():
-            if qr.exists():
-                return qr
-            time.sleep(2)
-        return qr if qr.exists() else None
-
-    # ── 步骤 4: 发送二维码给管理员 ──
-
-    def _send_qrcode(self, qr_path: Path) -> None:
-        """等待主客户端重连后推送二维码。"""
-        deadline = time.time() + RECONNECT_WAIT
-        while time.time() < deadline and not self._stop.is_set():
-            if self._is_main_connected():
-                break
-            time.sleep(2)
-        else:
-            self._log("error", f"主客户端 {RECONNECT_WAIT}s 内未重连，二维码未发送")
-            return
-
-        try:
-            img_bytes = qr_path.read_bytes()
-            img_b64 = base64.b64encode(img_bytes).decode("ascii")
-            message = [
-                {"type": "text", "data": {"text": "NapCat 已重启，请扫码登录\n"}},
-                {"type": "image", "data": {"file": f"base64://{img_b64}"}},
-            ]
-            self._send(self._admin_qq, message)
-            self._log("info", f"二维码已发送给管理员 QQ({self._admin_qq})")
-            self._set_state(STATE_QR_SENT)
-        except Exception as e:
-            self._log("error", f"发送二维码失败: {e}")
-            self._set_state(STATE_ERROR)

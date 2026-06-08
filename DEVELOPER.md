@@ -1,6 +1,6 @@
 # SSO Tools — 教务工具集开发者手册
 
-> **版本**: v2.0 | **最后更新**: 2026-06-08
+> **版本**: v2.1 | **最后更新**: 2026-06-08
 
 ---
 
@@ -1750,9 +1750,297 @@ users.db.login_creds 表 ← 写入: qq/monitor_forward.py (#登录)
 
 ---
 
-## 九、二课系统 API 接口
+## 九、三端数据流全景
 
-### 9.1 认证
+### 9.1 概述
+
+本项目三个核心工具——**QQ 转发工具**、**二课调度工具**、**课表工具**——通过共享的凭证存储和数据库实现数据互通。QQ 转发工具是所有用户指令的入口，二课调度工具是数据采集的后台进程，课表工具提供教务系统课表数据。
+
+```mermaid
+graph TB
+    subgraph User["用户入口"]
+        QQ_CMD["QQ 群 #指令<br/>qq/monitor_forward.py<br/>qq/qq_forward.py"]
+    end
+
+    subgraph Storage["共享存储层"]
+        ACCT["accounts.json<br/>账号/凭证<br/>core/account_store.py 读写"]
+        DB["users.db<br/>7张SQLite表<br/>secondclass_tool.py 路径"]
+        SCHED_DIR["schedules/{sid}/<br/>课表JSON/Excel/PNG"]
+    end
+
+    subgraph ScheduleMod["课表工具"]
+        SCH_CLI["schedule/jwgl_client.py<br/>JWGL HTTP客户端"]
+        SCH_TOOL["schedule/schedule_tool.py<br/>课表GUI + 导入导出"]
+        SCH_IMG["schedule/schedule_image.py<br/>课表图片渲染"]
+    end
+
+    subgraph SCMod["二课核心"]
+        SC_TOOL["secondclass/secondclass_tool.py<br/>SSID管理/积分/活动/详情"]
+        SC_IMG["secondclass/secondclass_image.py<br/>二课信息图"]
+        SC_CHART["secondclass/secondclass_activity_chart.py<br/>活动卡片/列表"]
+    end
+
+    subgraph Scheduler["二课调度工具"]
+        SCHED["secondclass/secondclass_scheduler.py<br/>定时后台拉取"]
+        SCHED_GUI["secondclass/secondclass_tool_gui.py<br/>调度管理GUI"]
+    end
+
+    subgraph Auth["认证层"]
+        SSO["sso/sso_common.py<br/>SSO登录常量+函数"]
+        SESSION["core/user_session.py<br/>多步会话管理"]
+        ONE_BOT["core/onebot_client.py<br/>OneBot v11 WS客户端"]
+        CMD_UTILS["core/command_utils.py<br/>消息回复公共方法"]
+    end
+
+    QQ_CMD -->|"find_account_by_qq()"| ACCT
+    QQ_CMD -->|"JWGLClient 实例化"| SCH_CLI
+    QQ_CMD -->|"secondclass_tool 函数调用"| SC_TOOL
+    QQ_CMD -->|"读取缓存"| DB
+    QQ_CMD -->|"读取课表"| SCHED_DIR
+
+    SCH_CLI -->|"load_data()/save_data()"| ACCT
+    SCH_CLI -->|"保存课表"| SCHED_DIR
+
+    SCH_TOOL -->|"load_data()"| ACCT
+    SCH_TOOL -->|"保存/读取课表"| SCHED_DIR
+
+    SCH_IMG -->|"读取课表JSON"| SCHED_DIR
+
+    SCHED -->|"get_all_user_credentials()"| ACCT
+    SCHED -->|"get_all_user_credentials()"| DB
+    SCHED -->|"fetch_and_store_master_data()"| SC_TOOL
+    SCHED -->|"写入"| DB
+
+    SC_TOOL -->|"读凭证"| ACCT
+    SC_TOOL -->|"读写积分/活动"| DB
+    SC_IMG -->|"读积分快照"| DB
+    SC_CHART -->|"读活动/详情"| DB
+
+    QQ_CMD --> SSO
+    SCH_CLI --> SSO
+    SC_TOOL --> SSO
+```
+
+### 9.2 核心数据流总览
+
+| 数据流 | 发起者 → 调用目标 | 数据源 | 数据去向 |
+|--------|------------------|--------|---------|
+| **用户登录** | QQ指令 → `JWGLClient.sso_login()` | 用户输入 | `accounts.json` + `users.db.users` |
+| **课表获取** | QQ指令 → `JWGLClient.get_schedule()` | JWGL 教务系统 API | `schedules/{sid}/{semester}.json` |
+| **课表缓存读取** | QQ指令 → `schedule.io._load_schedule_from_json()` | `schedules/{sid}/{semester}.json` | 图片渲染/Excel导出 |
+| **二课积分** | QQ指令 → `fetch_and_save_secondclass_info()` | 二课系统 API | `users.db.second_class_v2` |
+| **二课活动总表** | 二课调度器 → `fetch_and_store_master_data()` | 二课系统 API | `users.db.second_class_master_v2` |
+| **二课活动详情** | 二课调度器 / QQ指令 → `fetch_activity_detail_page()` | 二课系统 API | `users.db.second_class_activity_detail_v3` |
+| **用户未结束活动** | 二课调度器 → `fetch_and_store_my_unfinished_activities()` | 二课系统 API | `users.db.second_class_user_activities` |
+| **活动报名** | QQ指令 → `fetch_apply_page()` + `submit_activity_apply()` | 二课系统 API | 直接提交（不入缓存） |
+| **签到/签退** | QQ指令 → `submit_sign()` | 二课系统 API | 直接提交（不入缓存） |
+
+### 9.3 共享数据源详解
+
+#### 9.3.1 `accounts.json` — 凭证权威来源
+
+| 属性 | 说明 |
+|------|------|
+| 路径 | `d:\code\private\class\accounts.json` |
+| 常量定义 | `sso/sso_common.py:DATA_FILE` |
+| 读写函数 | `sso_common.load_data()` / `save_data()` — 各模块统一调用 |
+| 统一读写层 | `core/account_store.py` — `find_account_by_qq()`, `save_account()`, `ensure_account()` |
+
+**使用者矩阵**：
+
+| 使用者 | 读 | 写 | 入口函数 |
+|--------|:--:|:--:|---------|
+| QQ 转发 `monitor_forward.py` | ✅ | ✅ | `find_account_by_qq()` |
+| QQ 转发 `qq_forward.py` | ✅ | ✅ | `UserDB` + `find_account_by_qq()` |
+| 课表 GUI `schedule_tool.py` | ✅ | ✅ | `App.__init__()` 直接调 `load_data()` |
+| 二课调度 `secondclass_scheduler.py` | ✅ | ❌ | 间接通过 `get_all_user_credentials()` |
+| 二课核心 `secondclass_tool.py` | ✅ | ❌ | `get_all_user_credentials()` |
+
+#### 9.3.2 `users.db` — SQLite 共享数据库
+
+| 属性 | 说明 |
+|------|------|
+| 路径 | `d:\code\private\class\users.db` |
+| 常量定义 | `secondclass/secondclass_tool.py:USER_DB_FILE` |
+| 持有者 | `secondclass/secondclass_tool.py`（SQLite 连接管理） |
+
+**跨模块读写映射**：
+
+| 表名 | 主键 | 写入者 | 读取者 |
+|------|------|--------|--------|
+| `users` | `qq` | `qq/qq_forward.py:UserDB`、`qq/monitor_forward.py` | `secondclass/secondclass_tool.py`、`monitor_forward.py`、`qq_forward.py` |
+| `login_creds` | `qq` | `qq/monitor_forward.py`（#登录保存密码） | `qq/monitor_forward.py`（#更新自动重登） |
+| `second_class_v2` | `student_id` | `SecondClassDB.upsert()`（由 `fetch_and_save_secondclass_info()` 调用） | `SecondClassDB.get_by_qq/get_by_student_id()` |
+| `second_class_master_v2` | `(student_id, activity_id)` | `SecondClassMasterDB.upsert_activities()`（由 `fetch_and_store_master_data()` 调用） | `SecondClassMasterDB.get_by_student_id()` |
+| `second_class_activity_detail_v3` | `activity_id` | `SecondClassActivityDetailDB.upsert()` | `SecondClassActivityDetailDB.get_by_activity_id()` |
+| `second_class_user_activities` | `(student_id, activity_id)` | `fetch_and_store_my_unfinished_activities()` | `SecondClassUserActivityDB.get_activity_ids_by_student_id()` |
+
+#### 9.3.3 `schedules/{student_id}/` — 课表文件目录
+
+| 属性 | 说明 |
+|------|------|
+| 格式 | `schedules/{学号}/{学期}.json` / `.xlsx` / `secondclass.png` / `_activity_charts/` |
+| 写入者 | `schedule/jwgl_client.py:JWGLClient.get_schedule()` → `Schedule.save_json()`、QQ 转发指令 |
+| 读取者 | `schedule.io._load_schedule_from_json()`、`schedule.schedule_image`（渲染图片） |
+
+### 9.4 跨模块函数调用链
+
+#### 9.4.1 QQ 转发 → 课表模块（`schedule/`）
+
+所有 SSO 登录相关的 #指令（`#登录`、`#扫码登录`、`#更新课表`、`#密码更新`、`#更新模板课表`、`#更新`）均实例化 `JWGLClient` 并调用其方法：
+
+```python
+# qq/monitor_forward.py 中典型调用链
+from schedule.jwgl_client import JWGLClient
+
+# #登录 指令
+client = JWGLClient()
+client.begin_sso()             # 获取 accKey + 验证码
+client.sso_login(ucode, pwd, rcode)   # 学号密码登录
+client.portal_login(ticket)    # 门户登录
+client.bridge()                # JWGL 桥接 → bzb_jsxsd cookie
+schedule = client.get_schedule(semester, week, sid, name)  # 获取课表
+schedule.save_json(path)       # 保存到 schedules/{sid}/{sem}.json
+```
+
+课表缓存读取指令（`#本周课表`、`#今日课表`、`#明天课表`、`#第N周课表`）使用 `schedule/io.py` 和 `schedule/schedule_image.py`：
+
+```python
+# 典型调用链
+from schedule.io import _schedule_path, _load_schedule_from_json
+from schedule.schedule_image import render_day_image
+
+path = _schedule_path(student_id, semester)        # 构建文件路径
+schedule = _load_schedule_from_json(path)           # 读取本地JSON
+img_path = render_day_image(schedule, ...)          # 渲染图片
+```
+
+#### 9.4.2 QQ 转发 → 二课核心（`secondclass/`）
+
+二课相关 #指令直接调用 `secondclass/secondclass_tool.py` 的函数：
+
+```python
+# qq/monitor_forward.py 或 qq/qq_forward.py 中
+from secondclass import secondclass_tool as sct
+
+# #二课信息 指令
+sess = sct.obtain_secondclass_session_from_user(user)   # 获取SSID会话
+data = sct.fetch_all_with_session(sess)                  # 抓取积分数据
+sct.SecondClassDB.upsert(qq, **data)                     # 写入 DB
+from secondclass.secondclass_image import render_secondclass_chart
+render_secondclass_chart(student_id, data)               # 渲染信息图
+
+# #报名 <ID> 指令
+sess = sct.obtain_secondclass_session_from_user(user)
+page_data = sct.fetch_apply_page(sess, activity_id)      # 获取报名页(s1/s2)
+captcha = ...                                             # 验证码处理
+result = sct.submit_activity_apply(sess, activity_id, captcha, s1, s2)
+
+# #<活动ID> 指令
+detail = sct.SecondClassActivityDetailDB.get_by_activity_id(aid)
+if not detail:
+    sct.fetch_and_save_activity_detail(sess, aid)        # 实时拉取
+    detail = sct.SecondClassActivityDetailDB.get_by_activity_id(aid)
+from secondclass.secondclass_activity_chart import render_activity_card
+render_activity_card(detail)                              # 渲染卡片图片
+```
+
+#### 9.4.3 二课调度器 → 二课核心
+
+```python
+# secondclass/secondclass_scheduler.py 中
+from secondclass import secondclass_tool as sct
+
+def run_once(self):
+    users = sct.get_all_user_credentials()  # 读取 accounts.json + users.db
+    for user in users:
+        sess = sct.obtain_secondclass_session_from_user(user)
+        sct.fetch_and_store_master_data(
+            sess, user.student_id, user.qq,
+            fetch_details=True, max_detail_activities=10,
+            include_reparse=True, scan_new=True, scan_range=50
+        )
+        sct.fetch_and_store_my_unfinished_activities(
+            sess, user.student_id, user.qq
+        )
+```
+
+#### 9.4.4 凭证共享链
+
+```
+code (一次性, 5分钟)
+  ↓ exchange_code_for_token() [sso/sso_common.py]
+access_token (1小时, 持久化: accounts.json + users.db.users)
+  ↓ get_portal_ticket() / obtain_portal_ticket() [sso_common.py / secondclass_tool.py]
+portal_ticket (会话期内, 持久化: accounts.json + users.db.users)
+  ├─ JWGLClient.bridge() → bzb_jsxsd (仅内存, 课表会话)
+  └─ dtLog!log.action → cqtbiSSO → SSID (仅内存, _SSID_CACHE)
+```
+
+| 凭证 | accounts.json | users.db.users | 内存 |
+|------|:---:|:---:|:---:|
+| `access_token` | `accounts[].access_token` | `users.access_token` | — |
+| `portal_ticket` | `accounts[].portal_ticket` | `users.portal_ticket` | — |
+| `bzb_jsxsd` | — | — | `requests.Session.cookies` (JWGLClient) |
+| `SSID` | — | — | `_SSID_CACHE[student_id]` (secondclass_tool 模块级) |
+
+**凭证优先级**：`get_all_user_credentials()` 先读 `users.db.users` 表，再读 `accounts.json`，同 `student_id` 时 `accounts.json` 覆盖 users 表。
+
+### 9.5 依赖关系总结
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                       accounts.json                               │
+│           core/account_store.py 统一读写接口                      │
+│   字段: qq, student_id, password, access_token, portal_ticket     │
+└────┬──────────┬──────────────┬────────────────┬──────────────────┘
+     │          │              │                │
+     ▼          ▼              ▼                ▼
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐
+│QQ转发工具 │ │二课调度器 │ │课表GUI   │ │二课核心      │
+│monitor/   │ │scheduler │ │schedule  │ │secondclass   │
+│qq_forward │ │(只读)    │ │_tool.py  │ │_tool.py      │
+│(读+写)    │ │          │ │(读+写)   │ │(只读)        │
+└────┬──────┘ └────┬─────┘ └────┬─────┘ └──────┬───────┘
+     │             │            │               │
+     │             ▼            │               │
+     │    ┌──────────────────────────────────────────────┐
+     │    │                   users.db                    │
+     │    │   7张SQLite表 (secondclass_tool.py 路径)      │
+     │    │   users, login_creds, second_class_v2,        │
+     │    │   second_class_master_v2, detail_v3,          │
+     │    │   second_class_user_activities, reservations  │
+     │    └──────────────────────────────────────────────┘
+     │                         ▲
+     │                         │
+     ▼                         │
+┌──────────────────────────────────────────────────────┐
+│             schedules/{student_id}/                   │
+│   课表JSON/Excel (写:QQ指令+课表GUI, 读:课表图片渲染) │
+│   二课PNG (写:QQ指令#二课信息, 读:QQ指令#二课图表)     │
+│   活动卡片 (写:#<活动ID>/#查看二课, 读:合并转发)        │
+└──────────────────────────────────────────────────────┘
+```
+
+### 9.6 关键设计要点
+
+1. **`users.db` 是核心共享数据库**：由 `secondclass/secondclass_tool.py` 中的 `USER_DB_FILE` 常量定义路径，所有模块（二课、QQ、预约）共用同一个 SQLite 文件。各 `*DB` 类内部使用线程锁保证并发安全。
+
+2. **`accounts.json` 是凭证权威来源**：`get_all_user_credentials()` 先读 `users.db.users` 表，再读 `accounts.json`，同 `student_id` 时 `accounts.json` 覆盖 users 表（后者存有更新的 token/ticket）。
+
+3. **SSID 和 bzb_jsxsd 不持久化**：这两个会话 cookie 只在内存中（`_SSID_CACHE` 和 `requests.Session.cookies`），进程重启后需重新通过 `portal_ticket` 桥接获取。
+
+4. **QQ 模块是课表和二课的"用户入口"**：所有 #指令 都通过 `core/account_store.find_account_by_qq()` 从 `accounts.json` 获取凭证，然后调用 `schedule/jwgl_client.py` 或 `secondclass/secondclass_tool.py` 的函数。QQ 模块本身不实现业务逻辑，只做路由和编排。
+
+5. **二课调度器是"独立运行的后台进程"**：它不依赖 QQ 模块，独立从 `accounts.json` + `users.db` 读取凭证，定时拉取数据写入 `users.db` 的二课相关表，供 QQ 模块的 `#二课图表`、`#查看二课`、`#我的二课` 等指令读取缓存。
+
+6. **凭证共享层**：`core/account_store.py` 是所有模块统一的 `accounts.json` 读写入口；`sso/sso_common.py` 提供所有 SSO 认证函数。两个 QQ 版本（`monitor_forward.py` 和 `qq_forward.py`）共享 `core/onebot_client.py` 和 `core/command_utils.py`。
+
+---
+
+## 十、二课系统 API 接口
+
+### 10.1 认证
 
 **桥接登录（获取 SSID）**
 
@@ -1768,7 +2056,7 @@ GET https://2class.cqtbi.edu.cn/Admin/Index/cqtbiSSO?PORTAL_TICKET={ticket}
 | 必要 Header | `Referer: http://szxy.cqtbi.edu.cn/` |
 | 响应 | `Set-Cookie: SSID=xxx` |
 
-### 9.2 数据接口
+### 10.2 数据接口
 
 | 接口 | 方法 | 说明 | 返回格式 |
 |------|------|------|---------|
@@ -1783,7 +2071,7 @@ GET https://2class.cqtbi.edu.cn/Admin/Index/cqtbiSSO?PORTAL_TICKET={ticket}
 | `/Student/My/myActivity_End.html` | POST | 我的活动（已结束分页） | JSON |
 | `/Student/My/myActivity_other.html` | POST | 我的活动（其它状态分页） | JSON |
 
-### 9.3 活动报名流程
+### 10.3 活动报名流程
 
 ```mermaid
 sequenceDiagram
@@ -1820,11 +2108,11 @@ sequenceDiagram
 | `ACTIVITY_VERIFYCODE_URL` | `{BASE_URL}/Student/Activity/verifycode.html` |
 | `ACTIVITY_APPLY_GO_URL` | `{BASE_URL}/Student/Activity/applyGo.html` |
 
-### 9.4 活动状态码
+### 10.4 活动状态码
 
 活动状态有多个来源，不同接口返回的状态名称和编码逻辑不同，以下统一汇总。
 
-#### 9.4.1 原始 API 状态码（`ACTIVITY_STATUS_MAP`）
+#### 10.4.1 原始 API 状态码（`ACTIVITY_STATUS_MAP`）
 
 定义于 `secondclass/secondclass_tool.py` 第 1496 行，用于 API 返回的 `status` 字段直接映射：
 
@@ -1839,7 +2127,7 @@ sequenceDiagram
 | `6` | 已结束 | 活动已结束 |
 | `7` | 已取消 | 活动已取消 |
 
-#### 9.4.2 "我的活动"标签页映射（`MY_ACTIVITY_TABS` + `TAB_STATUS`）
+#### 10.4.2 "我的活动"标签页映射（`MY_ACTIVITY_TABS` + `TAB_STATUS`）
 
 从"我的活动"页面的服务端渲染标签页解析而来，`tab_id` 映射为 `(status_code, status_name)`：
 
@@ -1853,7 +2141,7 @@ sequenceDiagram
 
 > `tab=5 ("未开始")` 的 `status_code` 在 DB 中存为 `"0"`，但语义上是"已报名且活动未开始"，与原始 API 的 `"0"="草稿"` 不同。代码中通过 `tab_id` 上下文区分。
 
-#### 9.4.3 详情页解析状态名
+#### 10.4.3 详情页解析状态名
 
 从活动详情页 `apply.html` 的 CSS class 提取（`secondclass_tool.py` 第 1738 行）：
 
@@ -1870,14 +2158,14 @@ if "未开始" in status:
 > **注意**：旧版本中此处会 `continue` 跳过"未开始"活动，导致其无法录入 detail 表。
 > 当前版本已修复，**仅计数不跳过**，所有活动（含"报名未开始"、"活动未开始"）均正常录入。
 
-#### 9.4.4 其他派生状态
+#### 10.4.4 其他派生状态
 
 | 来源 | 状态名 | 说明 |
 |------|--------|------|
 | `_infer_activity_status()` | 报名失败 | `applyStatus == 2` 时返回 |
 | `_infer_activity_status()` | 已取消 | `isClosed == 1` 时返回 |
 
-### 9.5 活动列表字段
+### 10.5 活动列表字段
 
 | JSON 字段 | 类型 | 映射字段 | 说明 |
 |-----------|------|---------|------|
@@ -1897,7 +2185,7 @@ if "未开始" in status:
 | `img` | string | `img` | 图片文件名 |
 | `isClosed` | int | `is_closed` | 是否关闭 |
 
-### 9.6 自动积分相关 API
+### 10.6 自动积分相关 API
 
 以下接口主要用于 `secondclass_auto_score.py` 的自动化操作：
 
@@ -1922,7 +2210,7 @@ if "未开始" in status:
 | 签退 | `/Student/Activity/signOut.html`, `qiantui.html`, `/Student/My/signOut.html`, `activitySignOut.html` |
 | 提交总结 | `/Student/My/myActivitySummary.html`, `/Student/Activity/submitSummary.html`, `/Student/My/summary.html` |
 
-### 9.7 签到/签退接口（`signOnTV`）
+### 10.7 签到/签退接口（`signOnTV`）
 
 签到与签退共用同一个 Admin 端投屏页面，通过 `isSignOut` 参数区分模式。
 
@@ -1975,7 +2263,7 @@ def submit_sign(sess, activity_id, *, sign_out=False, channel_id=5, rand=None) -
 SIGN_ON_TV_URL = "https://2class.cqtbi.edu.cn/Admin/Index/signOnTV.html"
 ```
 
-### 9.8 二维码签到/签退流程
+### 10.8 二维码签到/签退流程
 
 ```mermaid
 sequenceDiagram
@@ -2028,7 +2316,7 @@ sequenceDiagram
 
 
 
-## 十、附录 — 代码风格
+## 十一、附录 — 代码风格
 
 ### 10.1 命名约定
 
@@ -2071,7 +2359,7 @@ sequenceDiagram
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
-| v2.0 | 2026-06-08 | 全量重写 §五 #指令系统：增加 29 条指令完整对照表（含数据源列）；新增 6 张 mermaid 工作流图（架构总览、依赖链、数据源、登录、报名、扫码签到、预约报名）；新增会话状态机图（含扫码签到状态）；新增权限等级与指令分类表 |
+| v2.1 | 2026-06-08 | 新增 §九 三端数据流全景：QQ转发工具、二课调度工具、课表工具之间的完整数据流分析与依赖关系（含数据流表、调用链、凭证共享链、使用者矩阵、mermaid 架构图）；章节重编号：旧 §九→§十，§十→§十一 |
 | v1.6 | 2026-06-07 | 新增 `second_class_user_activities` 表（仅存 qq/student_id/activity_id），记录用户未结束活动（报名中+活动中+未开始）；新增 `SecondClassUserActivityDB` 类与 `fetch_and_store_my_unfinished_activities()` 函数；`fetch_and_store_master_data()` 移除 Step2（我的活动不再写入 master 表），改为调度器中独立拉取新表；更新数据流全景图与 DB 表结构文档 |
 | v1.5 | 2026-06-07 | 新增 §4.15.1 活动总表（`second_class_master_v2`）录入逻辑与数据流文档（含 `fetch_and_store_master_data()` 四步流程、`fetch_activities_can_apply()`、`fetch_all_my_activities()` 详解、`upsert_activities()` 写入逻辑）；新增 §4.15.2 活动详情表（`second_class_activity_detail_v3`）录入逻辑与数据流文档（含三层解析策略、`_LABEL_FIELD_MAP` 标签→字段映射表、3 个写入入口）；新增 §4.15.3 数据流全景图（mermaid 流程图）；更新 §4.16 调度器文档，补充详情拉取参数和限制说明 |
 | v1.4 | 2026-06-05 | 新增 `schedule/jwgl_client.py` JWGL 教务系统客户端（从 schedule_tool 重构提取，新增成绩查询 `get_grades()`）；新增 `secondclass_auto_score.py` 二课自动积分工具（status/signup/probe/summary/monitor/run 6大子命令，含 ddddocr 验证码识别）；新增 `sso_to_ssid.py` SSID 转换工具及 `convert_to_ssid()` 函数；新增凭证转换链文档 §7.5（含转换流程图、存储位置表、函数映射表、凭证层级图）；新增成绩查询 API 文档（`cqtbi-api.md` §3.3）；新增二课自动积分 API 文档（`DEVELOPER.md` §9.6）；更新 4.1 核心功能表和模块编号 |

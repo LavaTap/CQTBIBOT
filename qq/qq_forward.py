@@ -176,18 +176,43 @@ def setup_logging() -> None:
 # ---------- 配置 ----------
 @dataclass
 class ForwardConfig:
+    """转发配置，支持多 WebSocket 连接。
+
+    connections 格式:
+        { "连接名": {"ws_url": "ws://...", "access_token": "..."} }
+    """
+    connections: dict = None
+    default_connection: str = ""
     ws_url: str = "ws://127.0.0.1:3001"
     access_token: str = ""
     source_groups: list[int] = None
     target_groups: list[int] = None
     admin_qq: int = 3602653998
     command_enabled: bool = True
+    monitor_ws_url: str = "ws://127.0.0.1:3001"
+    monitor_access_token: str = ""
 
     def __post_init__(self) -> None:
+        if self.connections is None:
+            self.connections = {}
+            if self.ws_url:
+                self.connections["main"] = {
+                    "ws_url": self.ws_url,
+                    "access_token": self.access_token,
+                }
+                self.default_connection = "main"
         if self.source_groups is None:
             self.source_groups = []
         if self.target_groups is None:
             self.target_groups = []
+
+    @property
+    def _current_conn(self) -> dict:
+        """返回当前选中的连接配置。"""
+        conn = self.connections.get(self.default_connection) if self.default_connection else None
+        if conn:
+            return conn
+        return {"ws_url": self.ws_url, "access_token": self.access_token}
 
     def save(self) -> None:
         CONFIG_FILE.write_text(
@@ -205,6 +230,26 @@ class ForwardConfig:
             raw_tgt = data.get("target_groups") or data.get("target_group", 0)
             src_list = _ensure_list(raw_src)
             tgt_list = _ensure_list(raw_tgt)
+
+            # 解析多连接
+            connections = data.get("connections")
+            if isinstance(connections, dict) and connections:
+                default_name = data.get("default_connection") or next(iter(connections))
+                conn = connections.get(default_name, {})
+                return cls(
+                    connections=connections,
+                    default_connection=default_name,
+                    ws_url=conn.get("ws_url", "ws://127.0.0.1:3001"),
+                    access_token=conn.get("access_token", ""),
+                    source_groups=src_list,
+                    target_groups=tgt_list,
+                    admin_qq=int(data.get("admin_qq", 3602653998)),
+                    command_enabled=bool(data.get("command_enabled", True)),
+                    monitor_ws_url=data.get("monitor_ws_url", "ws://127.0.0.1:3001"),
+                    monitor_access_token=data.get("monitor_access_token", ""),
+                )
+
+            # 旧格式兼容
             return cls(
                 ws_url=data.get("ws_url", "ws://127.0.0.1:3001"),
                 access_token=data.get("access_token", ""),
@@ -212,18 +257,27 @@ class ForwardConfig:
                 target_groups=tgt_list,
                 admin_qq=int(data.get("admin_qq", 3602653998)),
                 command_enabled=bool(data.get("command_enabled", True)),
+                monitor_ws_url=data.get("monitor_ws_url", "ws://127.0.0.1:3001"),
+                monitor_access_token=data.get("monitor_access_token", ""),
             )
         except (OSError, json.JSONDecodeError, ValueError):
             return cls()
 
     def _to_dict(self) -> dict:
         return {
-            "ws_url": self.ws_url,
-            "access_token": self.access_token,
+            "connections": self.connections or {
+                self.default_connection or "main": {
+                    "ws_url": self.ws_url,
+                    "access_token": self.access_token,
+                }
+            },
+            "default_connection": self.default_connection or "main",
             "source_groups": self.source_groups,
             "target_groups": self.target_groups,
             "admin_qq": self.admin_qq,
             "command_enabled": self.command_enabled,
+            "monitor_ws_url": self.monitor_ws_url,
+            "monitor_access_token": self.monitor_access_token,
         }
 
 
@@ -2640,6 +2694,23 @@ class ForwardApp(tk.Tk):
         cfg_frame = ttk.LabelFrame(fwd_frame, text="连接配置")
         cfg_frame.pack(fill="x", padx=4, pady=(4, 2))
 
+        # 连接选择器
+        row_sel = ttk.Frame(cfg_frame)
+        row_sel.pack(fill="x", padx=6, pady=(4, 0))
+        ttk.Label(row_sel, text="连接:").pack(side="left")
+        self.conn_names = list(self.config.connections.keys()) or ["main"]
+        self.conn_var = tk.StringVar(value=self.config.default_connection or self.conn_names[0])
+        self.conn_combo = ttk.Combobox(
+            row_sel, textvariable=self.conn_var, values=self.conn_names,
+            state="readonly", width=18,
+        )
+        self.conn_combo.pack(side="left", padx=4)
+        self.conn_combo.bind("<<ComboboxSelected>>", self._on_conn_switch)
+        self.add_conn_btn = ttk.Button(row_sel, text="+", width=3, command=self._add_connection)
+        self.add_conn_btn.pack(side="left", padx=2)
+        self.del_conn_btn = ttk.Button(row_sel, text="-", width=3, command=self._del_connection)
+        self.del_conn_btn.pack(side="left", padx=2)
+
         row0 = ttk.Frame(cfg_frame)
         row0.pack(fill="x", padx=6, pady=4)
         ttk.Label(row0, text="OneBot WS:").pack(side="left")
@@ -2764,13 +2835,82 @@ class ForwardApp(tk.Tk):
 
         # --- 信息说明 ---
         info = (
-            "NapCat 监控会定期检测 3001 端口 NapCat 实例的心跳状态。\n"
-            "掉线时自动 kill 3001 进程并重启 napcat.bat，新二维码将通过私聊发送给管理员。\n"
-            "3002 端口的 NapCat 实例不受影响。"
+            "NapCat 监控会定期检测配置中 monitor_ws_url 指向的 NapCat 实例心跳状态。\n"
+            "掉线时自动 kill 该端口进程并重启 napcat.bat，新二维码将通过私聊发送给管理员。\n"
+            "其他端口的 NapCat 实例不受影响。\n"
+            "（目标端口未启动时只记日志退避重试，不会触发重启。）"
         )
         ttk.Label(napcat_frame, text=info, foreground="#888", justify="left").pack(
             fill="x", padx=8, pady=(4, 8),
         )
+
+    # ======================== 连接管理 ========================
+
+    def _sync_conn_to_config(self) -> None:
+        """将当前 UI 的 ws_url/token 同步到 config.connections 中的当前连接。"""
+        name = self.conn_var.get()
+        if not name:
+            return
+        self.config.connections[name] = {
+            "ws_url": self.ws_var.get().strip(),
+            "access_token": self.token_var.get().strip(),
+        }
+        self.config.default_connection = name
+
+    def _refresh_conn_combo(self) -> None:
+        """刷新连接下拉框的值列表。"""
+        names = list(self.config.connections.keys())
+        self.conn_combo["values"] = names
+        if self.conn_var.get() not in names:
+            self.conn_var.set(names[0] if names else "main")
+
+    def _on_conn_switch(self, event=None) -> None:
+        """切换连接时，先保存当前编辑，再加载目标连接的配置。"""
+        old_name = self.config.default_connection
+        if old_name:
+            self.config.connections[old_name] = {
+                "ws_url": self.ws_var.get().strip(),
+                "access_token": self.token_var.get().strip(),
+            }
+        new_name = self.conn_var.get()
+        conn = self.config.connections.get(new_name, {})
+        self.config.default_connection = new_name
+        self.config.ws_url = conn.get("ws_url", "ws://127.0.0.1:3001")
+        self.config.access_token = conn.get("access_token", "")
+        self.ws_var.set(self.config.ws_url)
+        self.token_var.set(self.config.access_token)
+
+    def _add_connection(self) -> None:
+        """添加新连接。"""
+        import tkinter.simpledialog as sd
+        name = sd.askstring("新建连接", "请输入连接名称:", parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        if name in self.config.connections:
+            messagebox.showwarning("重复", f"连接名 '{name}' 已存在")
+            return
+        self.config.connections[name] = {
+            "ws_url": "ws://127.0.0.1:3001",
+            "access_token": "",
+        }
+        self.conn_var.set(name)
+        self._on_conn_switch()
+        self._refresh_conn_combo()
+
+    def _del_connection(self) -> None:
+        """删除当前连接。至少保留一个连接。"""
+        name = self.conn_var.get()
+        if len(self.config.connections) <= 1:
+            messagebox.showwarning("禁止删除", "至少保留一个连接")
+            return
+        if not messagebox.askyesno("确认删除", f"确定删除连接 '{name}'?"):
+            return
+        del self.config.connections[name]
+        new_name = next(iter(self.config.connections))
+        self.conn_var.set(new_name)
+        self._on_conn_switch()
+        self._refresh_conn_combo()
 
     @staticmethod
     def _parse_group_text(text: str) -> list[int]:
@@ -2783,8 +2923,7 @@ class ForwardApp(tk.Tk):
         return ids
 
     def _save_config(self) -> None:
-        self.config.ws_url = self.ws_var.get().strip()
-        self.config.access_token = self.token_var.get().strip()
+        self._sync_conn_to_config()
         self.config.source_groups = self._parse_group_text(self.src_text.get("1.0", "end-1c"))
         self.config.target_groups = self._parse_group_text(self.tgt_text.get("1.0", "end-1c"))
         try:
@@ -2813,8 +2952,7 @@ class ForwardApp(tk.Tk):
             messagebox.showwarning("缺参数", "请至少填一组源群+目标群，或启用 #指令功能")
             return
 
-        self.config.ws_url = ws_url
-        self.config.access_token = self.token_var.get().strip()
+        self._sync_conn_to_config()
         self.config.source_groups = src_list
         self.config.target_groups = tgt_list
         try:
@@ -2884,19 +3022,8 @@ class ForwardApp(tk.Tk):
             return
         from qq.napcat_monitor import NapCatMonitor
 
-        ws_url = self.config.ws_url
-        token = self.config.access_token
-        admin_qq = self.config.admin_qq
-
-        def _send_cb(user_id: int, message: list[dict] | str) -> None:
-            """通过主转发客户端发送私聊。"""
-            if not self.forwarder or not self.forwarder._client:
-                self._log_message("error", "主客户端未连接，无法发送消息")
-                return
-            try:
-                self.forwarder._client.send_private_msg(user_id, message)
-            except Exception as e:
-                self._log_message("error", f"发送私聊失败: {e}")
+        ws_url = self.config.monitor_ws_url or self.config.ws_url
+        token = self.config.monitor_access_token or self.config.access_token
 
         def _is_connected() -> bool:
             return bool(self.forwarder and self.forwarder._client
@@ -2908,9 +3035,7 @@ class ForwardApp(tk.Tk):
         self._napcat_monitor = NapCatMonitor(
             ws_url=ws_url,
             access_token=token,
-            admin_qq=admin_qq,
             log_cb=self._log_message,
-            send_cb=_send_cb,
             is_main_connected=_is_connected,
             on_state_change=_on_state,
         )

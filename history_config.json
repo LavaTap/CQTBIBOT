@@ -1,6 +1,11 @@
 {
-  "ws_url": "ws://127.0.0.1:3001",
-  "access_token": "e~CR8-rdyI~2k.3Q",
+  "connections": {
+    "main": {
+      "ws_url": "ws://127.0.0.1:3001",
+      "access_token": "e~CR8-rdyI~2k.3Q"
+    }
+  },
+  "default_connection": "main",
   "source_group": 1045366153,
   "target_group": 1070689486,
   "count": 20
