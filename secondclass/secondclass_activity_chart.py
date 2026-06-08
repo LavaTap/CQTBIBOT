@@ -559,7 +559,7 @@ def generate_sample_card() -> Path:
 
 # ════════════════════ 批量列表渲染（最多10个活动一图）════════════════════
 
-LIST_OUTPUT_DIR = PROJECT_ROOT / "schedules" / "_activity_list_charts"
+LIST_OUTPUT_DIR = PROJECT_ROOT / "schedules" / "_activity_charts"
 LIST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 LIST_CARD_W = 420
@@ -683,7 +683,11 @@ class ActivityListRenderer:
 def render_activity_list(activities: list[dict], page: int = 1,
                          student_info: str = "",
                          output_dir: Path | None = None) -> Path:
-    """渲染一批活动中最多10个到一张图。"""
+    """渲染一批活动中最多10个到一张图。
+
+    默认保存到 schedules/_activity_charts/activity_list_p{page}.png。
+    建议调用方传入 output_dir=schedules/_activity_charts/{student_id}/ 以按学号组织。
+    """
     if output_dir is None:
         output_dir = LIST_OUTPUT_DIR
     fname = "activity_list_p%d.png" % page
@@ -696,7 +700,11 @@ def render_activity_list(activities: list[dict], page: int = 1,
 def render_all_activity_lists(activities: list[dict],
                               student_info: str = "",
                               output_dir: Path | None = None) -> list[Path]:
-    """将所有活动分页渲染，每页最多10个，返回所有图片路径。"""
+    """将所有活动分页渲染，每页最多10个，返回所有图片路径。
+
+    默认保存到 schedules/_activity_charts/ 下。
+    建议调用方传入 output_dir=schedules/_activity_charts/{student_id}/ 以按学号组织。
+    """
     if output_dir is None:
         output_dir = LIST_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)

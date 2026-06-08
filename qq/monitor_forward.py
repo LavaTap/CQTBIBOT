@@ -2076,7 +2076,7 @@ class CommandHandler:
 
             # ── 分页渲染（每页最多10个）──
             from secondclass.secondclass_activity_chart import render_all_activity_lists
-            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / "_activity_list_charts"
+            chart_dir = Path(__file__).resolve().parent.parent / "schedules" / "_activity_charts" / student_id
             chart_dir.mkdir(parents=True, exist_ok=True)
 
             paths = render_all_activity_lists(activities, student_info=student_info, output_dir=chart_dir)
