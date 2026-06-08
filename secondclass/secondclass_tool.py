@@ -3047,7 +3047,13 @@ def fetch_apply_page(sess: requests.Session, activity_id: str) -> dict:
         raise ActivityApplyError(f"活动页面返回 {r.status_code}")
 
     # 检查是否被重定向到登录页
-    if "login" in r.url.lower() or "ssid" not in [c.name for c in sess.cookies]:
+    # 注意：RequestsCookieJar.get() 大小写不敏感，但服务端下发的是大写 "SSID"
+    if "login" in r.url.lower() or not sess.cookies.get("SSID"):
+        cookie_names = {c.name for c in sess.cookies}
+        log.warning(
+            "fetch_apply_page 疑似登录失效: url=%s cookies=%s status=%s",
+            r.url, sorted(cookie_names), r.status_code,
+        )
         raise SecondClassAuthError("二课登录已过期，请重新 #扫码登录")
 
     soup = BeautifulSoup(r.text, "html.parser")
