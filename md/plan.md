@@ -1,171 +1,233 @@
-## 产品概述
+## 需求概述
 
-对现有 QQ 机器人（monitor_forward.py）扩展指令系统，实现 CQTBI 教务系统全链路操作，支持多用户独立使用。
+
+- 报名功能的完整实现架构
+- 核心代码文件和函数
+- 业务数据流和状态流转
+- 数据库表结构设计
 
 ## 核心功能
 
-### 1. `#更新模板课表`（原名 `#更新我的课表`）
+1. **#报名 [活动ID]** — 二课活动报名命令，支持带参数直接报名和无参数交互式输入活动ID
+2. **#我的二课** — 查询用户未结束活动（报名中/活动中/未开始），渲染活动卡片合并转发
+3. **后台定时拉取** — 调度器自动拉取所有用户的未结束活动并存入独立表
+4. **状态检测** — 自动检测已报名/已截止/人数已满/报名未开始等边界情况并提示用户
 
-- 所有人可用（移除管理员限制）
-- 直接读取本地 `schedules/2403740_2025-2026-2.xlsx` 文件，以合并转发方式发送给用户
-- 不涉及网络请求，快速响应
+## 技术方案
 
-### 2. `#登录` 指令（SSO 密码登录）
+### 技术栈
 
-- 所有人可用
-- 多步对话流程：
-- 第1步：要求用户发送学号（自动等待回复）
-- 第2步：要求用户发送密码（自动等待回复）
-- 第3步：拉取验证码图片，以 `image` 类型发送到 QQ
-- 第4步：接收用户填写的验证码，执行 SSO 完整登录（sso_login → portal_login → bridge）
-- 成功时：自动执行更新课表逻辑，保存账号与 QQ 关联
-- 失败时：以合并转发形式发送报错日志给用户
+| 层 | 技术 | 用途 |
+| --- | --- | --- |
+| 语言 | Python 3.10+ | 全部代码 |
+| QQ协议 | OneBot v11 (WebSocket) | 命令收发 |
+| HTTP | requests | 二课系统API调用 |
+| HTML解析 | BeautifulSoup | 解析报名页面提取字段 |
+| 数据库 | SQLite (users.db) | 存储未结束活动记录 |
+| 图片渲染 | Pillow | 活动卡片渲染 |
+| 日志 | logging | 统一日志记录 |
 
-### 3. `#扫码登录` 指令（二维码登录）
 
-- 所有人可用
-- 调用 OAuth2 `createErm` 接口生成动态二维码
-- 以 `image` 类型发送二维码图片到 QQ
-- 扫码成功后获取用户学校信息（姓名、学号、部门等），提示登录成功
-- 自动关联 QQ 号与学号，保存 token/ticket 到 accounts.json
+### 实现架构
 
-### 4. `#更新课表` 指令
+```
+┌─────────────────────────────────────────────────────┐
+│                    会话层 (QQ 转发器)                  │
+│  qq/monitor_forward.py    qq/qq_forward.py          │
+│                                                      │
+│  #报名 [活动ID] ──> _cmd_apply()                    │
+│  #报名 (无参数) ──> WAITING_APPLY_ACTIVITY_ID       │
+│  用户输入验证码 ──> WAITING_APPLY_CAPTCHA            │
+│  #我的二课    ──> _cmd_my_er()                      │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│                    业务层 (二课 API)                  │
+│              secondclass/secondclass_tool.py         │
+│                                                      │
+│  fetch_apply_page()        解析报名页/提取s1/s2      │
+│  fetch_verifycode_image()  获取验证码图片            │
+│  submit_activity_apply()   提交报名请求              │
+│  fetch_and_store_my_unfinished_activities()          │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│                    数据层 (DB 操作)                   │
+│              secondclass/secondclass_tool.py         │
+│                                                      │
+│  SecondClassUserActivityDB                           │
+│  ┌─ second_class_user_activities 表 ─┐              │
+│  │ id, qq, student_id, activity_id,  │              │
+│  │ fetched_at, can_apply             │              │
+│  └────────────────────────────────────┘              │
+│  方法: upsert_activities(), get_by_student_id(),     │
+│        get_activity_ids_by_student_id(),              │
+│        delete_by_activity_id(), clear_by_student_id()│
+└──────────────────────────────────────────────────────┘
+```
 
-- 核对该用户 QQ 号关联的 token/ticket
-- 调取 JWGL 课表接口获取课表 HTML，解析为结构化数据
-- 导出 Excel → 以合并转发方式发送文件到 QQ
-- 核心逻辑复用 `JWGLClient` 现有方法
-
-## 多用户支持
-
-- accounts.json 扩展为多用户存储，增加 `qq` 字段关联 QQ 号
-- 每个指令根据触发用户 QQ 查找对应账号信息
-- 会话状态管理：每个 QQ 独立跟踪多步对话进度
-
-## 技术栈
-
-- Python 3.8+（现有项目）
-- WebSocket 连接 NapCatQQ（现有 monitor_forward.py 的 websocket-client 库）
-- requests + cryptography（现有 SSO 登录库）
-- BeautifulSoup（现有课表解析）
-- openpyxl（现有 Excel 导出）
-
-## 实现方案
-
-### 系统架构
+### 报名流程状态机
 
 ```mermaid
-flowchart TD
-    A[QQ用户发消息] --> B[monitor_forward.py\nWebSocket消息循环]
-    B --> C[CommandHandler.try_handle]
-    C --> D{指令匹配}
-    D -->|#更新模板课表| E[读取本地schedules/2403740.xlsx\n合并转发到QQ]
-    D -->|#登录| F[UserSession多步对话\n学号->密码->验证码->SSO登录]
-    D -->|#扫码登录| G[createErm二维码\n发送图片->等待扫码->取用户信息]
-    D -->|#更新课表| H[按QQ查accounts.json\n获取token->bridge->拉课表->导出Excel]
-    F --> I[保存账号+QQ关联\n到accounts.json]
-    G --> I
-    H --> J[合并转发Excel文件到QQ]
-    E --> J
-    I --> K[SSO登录成功->自动执行\n更新课表逻辑]
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> WAITING_APPLY_ACTIVITY_ID: #报名 (无参数)
+    WAITING_APPLY_ACTIVITY_ID --> APPLYING: 用户输入活动ID
+    WAITING_APPLY_ACTIVITY_ID --> IDLE: #取消 / 超时
+
+    IDLE --> APPLYING: #报名 <活动ID>
+
+    state APPLYING {
+        [*] --> CHECK_APPLY_PAGE: fetch_apply_page()
+        CHECK_APPLY_PAGE --> NEED_CAPTCHA: need_captcha=true
+        CHECK_APPLY_PAGE --> SUBMIT_DIRECT: need_captcha=false
+        NEED_CAPTCHA --> WAITING_CAPTCHA: 发送验证码图片
+        WAITING_CAPTCHA --> SUBMITTING: 用户输入验证码
+        WAITING_CAPTCHA --> IDLE: #取消 / 超时
+        SUBMIT_DIRECT --> DONE: submit_activity_apply()
+        SUBMITTING --> DONE: _bg_apply_submit()
+        DONE --> [*]
+    }
+
+    APPLYING --> ERROR: ActivityApplyError(已报名/已截止/已满/未开始)
+    APPLYING --> ERROR: SecondClassAuthError(凭证过期)
+    ERROR --> IDLE
 ```
 
-### 文件修改/新增计划
-
-**修改文件：**
-
-1. `monitor_forward.py` — CommandHandler 扩展，新增 4 个指令处理逻辑
-2. `accounts.json` — 扩展数据结构，支持多账号+QQ关联
-
-**新增文件：**
-
-3. `user_session.py` — 会话状态管理器，管理多步对话跟踪
-4. `account_store.py` — 账号存储工具，读写 accounts.json 的 QQ 关联查询
-
-### 关键设计决策
-
-1. **会话状态管理（user_session.py）**
-
-- 状态枚举：IDLE / WAITING_STUDENT_ID / WAITING_PASSWORD / WAITING_CAPTCHA / WAITING_QR_SCAN
-- 每个 QQ 独立维护上下文（student_id, password, acc_key, session 等）
-- 全局字典 `{user_id: UserSession}`，使用 threading.Lock 保证线程安全
-- 定时清理：启动后台线程每 60 秒扫描，清理超过 5 分钟无操作的空闲会话
-
-2. **账号存储（account_store.py）**
-
-- `find_account_by_qq(qq: int) -> dict | None`
-- `save_account(qq: int, account_data: dict) -> None`
-- `update_account(qq: int, key: str, value) -> None`
-- 保持向后兼容：现有无 qq 字段的账号仍然可读
-
-3. **`#登录` 指令处理流程**
-
-- 用户发 `#登录` → 创建 UserSession(WAITING_STUDENT_ID) → 回复"请输入学号"
-- 用户发学号 → 检查格式 → 回复"请输入密码" → 保存储存
-- 用户发密码 → 调用 JWGLClient.begin_sso() 获取验证码 bytes → 以 image 类型发送到 QQ → 状态变为 WAITING_CAPTCHA
-- 用户发验证码 → 调用 JWGLClient.sso_login() → portal_login() → bridge() → get_schedule()
-- 成功后调用 account_store.save_account(qq, {...}) 保存全部字段
-
-4. **`#扫码登录` 指令处理流程**
-
-- 用户发 `#扫码登录` → 创建新 session
--  requests 请求 `http://szxy.cqtbi.edu.cn/oauth2/v1/createErm?seq={random}&v={device}` 获取二维码 bytes
-- 以 image 类型发送到 QQ
-- 轮询扫码结果：循环请求某个状态检查端点或等待用户手动确认
-- 获取到 code 后调用 `exchange_code_for_token()` 获取 access_token
-- 调用 `http://szxy.cqtbi.edu.cn/oauth2/v1/access_user`（POST, 传 access_token）获取用户信息
-- 保存账号信息到 accounts.json
-
-5. **`#更新课表` 指令处理流程**
-
-- 根据 user_id 调用 account_store.find_account_by_qq()
-- 未找到则回复"请先使用 #登录 或 #扫码登录"
-- 根据 portal_ticket 调用 JWGLClient.bridge() → get_schedule() → save_excel()
-- 合并转发 Excel 文件到群/私聊
-
-6. **`#更新模板课表` 指令处理流程**
-
-- 直接读取固定路径 `schedules/2403740_2025-2026-2.xlsx`
-- 以合并转发方式发送文件
-- 若文件不存在则提示"模板课表文件不存在"
-
-7. **指令匹配逻辑重构**
-
-- 先匹配精确指令名（`#更新模板课表`/`#登录`/`#扫码登录`/`#更新课表`）
-- 再检查是否有待处理的会话（WAITING 状态）
-- 都没命中则返回 False 走原有转发逻辑
-- 移除管理员权限检查，改为每个指令内部按需校验
-
-### 实现注意事项
-
-**性能：**
-
-- SSO 登录涉及多个 HTTP 请求，全部在后台线程执行
-- 扫码轮询使用较短超时（每个轮询间隔 3 秒，最多 120 秒超时）
-
-**日志：**
-
-- 复用现有 logger，密码/access_token 等敏感信息使用 sso_common.redact() 脱敏
-- 每个指令的执行结果用 INFO 级别记录
-
-**兼容性：**
-
-- 不破坏现有消息转发逻辑
-- `#更新模板课表` 保持与现有 `#更新我的课表` 相同的回复格式
-- accounts.json 旧格式自动兼容
-
-### 目录结构（仅显示新增/修改文件）
+### 核心数据流
 
 ```
-d:\code\private\class\
-├── monitor_forward.py      # [MODIFY] 扩展 CommandHandler，新增4个指令处理
-├── accounts.json           # [MODIFY] 数据结构扩展，增加 qq 字段支持多用户
-├── user_session.py         # [NEW] 会话状态管理器，多步对话跟踪与超时清理
-├── account_store.py        # [NEW] 账号存储工具，accounts.json 的 QQ 关联查询
-└── schedules/
-    └── 2403740_2025-2026-2.xlsx  # [使用] 模板课表文件
+用户发送 "#报名 123456"
+  │
+  ├→ CMD_APPLY 指令匹配 (monitor_forward.py:172 / qq_forward.py)
+  │
+  ├→ _cmd_apply() (monitor_forward.py:2332)
+  │    ├─ find_account_by_qq() → 获取用户凭证 (portal_ticket)
+  │    ├─ obtain_secondclass_session_from_user() → 获取二课 SSID 会话
+  │    ├─ fetch_apply_page(sess, activity_id) → 解析报名页
+  │    │    ├─ GET /Student/Activity/apply.html?activityID=xxx
+  │    │    ├─ 检测已报名(ok2.png) → 抛 ActivityApplyError
+  │    │    ├─ 检测报名已截止/人数已满 → 抛 ActivityApplyError
+  │    │    ├─ 提取隐藏字段 s1, s2 (来自 <form> 的 <input>)
+  │    │    └─ 返回 {s1, s2, activity_name, need_captcha, status_name}
+  │    │
+  │    ├─ [如果 need_captcha=false] 直接 submit_activity_apply()
+  │    │    └─ POST /Student/Activity/applyGo.html {activityID, activityApplyRand, s1, s2}
+  │    │
+  │    └─ [如果 need_captcha=true] 需要验证码
+  │         ├─ fetch_verifycode_image(sess)
+  │         │    └─ GET /Student/Activity/verifycode.html → 返回验证码图片 bytes
+  │         ├─ 设置会话状态 WAITING_APPLY_CAPTCHA
+  │         └─ 发送验证码图片给用户 + "请输入验证码"
+  │
+  ├→ 用户输入验证码 "8848"
+  │    └─ WAITING_APPLY_CAPTCHA 状态处理
+  │         └─ _bg_apply_submit(user_id, rcode)
+  │              ├─ get_session() → 获取存储的 session/apply_data
+  │              ├─ submit_activity_apply(sess, activity_id, rcode, s1, s2)
+  │              │    └─ POST applyGo.html → 返回 {success, message}
+  │              └─ 回复 "报名成功！活动：xxx" 或 "报名失败：xxx"
+  │
+  └→ 完成/清理会话
 ```
 
-# Agent Extensions
+### 核心文件清单
 
-无
+| 文件 | 行数变化 | 职责 |
+| --- | --- | --- |
+| `secondclass/secondclass_tool.py` | +249 | **核心业务层**：SecondClassUserActivityDB 类 + fetch_apply_page/fetch_verifycode_image/submit_activity_apply/fetch_and_store_my_unfinished_activities 函数 + ActivityApplyError 异常 |
+| `qq/monitor_forward.py` | +173 | **新版QQ命令处理器**：CMD_APPLY/#我的二课 命令定义、_cmd_apply()、_bg_apply_submit()、_cmd_my_er()、WAITING_APPLY_ACTIVITY_ID 会话处理 |
+| `qq/qq_forward.py` | +338 | **旧版QQ命令处理器**：_LoginState + _LoginSession 扩展、_cmd_apply()、_bg_apply_submit()、_cmd_my_er() |
+| `core/user_session.py` | +1 | 新增 `WAITING_APPLY_ACTIVITY_ID = 9` 会话状态枚举值 |
+| `secondclass/secondclass_scheduler.py` | +12 | 调度器循环中增加 fetch_and_store_my_unfinished_activities() 调用 |
+| `qq/help_image.py` | +3 | 帮助文本新增 "#报名 [活动ID]"、"#我的二课" 指令说明 |
+
+
+### 5个核心函数 (均位于 secondclass/secondclass_tool.py)
+
+**1. fetch_apply_page(sess, activity_id) -> dict**
+
+- 请求 `GET /Student/Activity/apply.html?activityID=xxx`
+- 用 BeautifulSoup 解析 HTML，检测状态（已报名/已截止/人数已满/未开始）
+- 提取隐藏表单字段 `<input name="s1">` 和 `<input name="s2">`
+- 返回 `{s1, s2, activity_name, need_captcha, status_name}`
+
+**2. fetch_verifycode_image(sess) -> bytes**
+
+- 请求 `GET /Student/Activity/verifycode.html`
+- 返回验证码图片的 bytes 数据
+- 处理返回 HTML 中内嵌图片的兜底逻辑
+
+**3. submit_activity_apply(sess, activity_id, captcha_code, s1, s2) -> dict**
+
+- 请求 `POST /Student/Activity/applyGo.html`
+- 参数: activityID, activityApplyRand, s1, s2
+- 返回 `{success: bool, message: str}`
+- 处理非 JSON 响应（认证失效返回 HTML）的兜底
+
+**4. fetch_and_store_my_unfinished_activities(sess, student_id, qq) -> dict**
+
+- 拉取 myActivity.html 的标签页1(报名中)+2(活动中)+5(未开始)
+- 提取所有 activity_id
+- 写入 second_class_user_activities 表（先清空旧记录）
+- 返回统计信息 `{tab1_count, tab2_count, tab5_count, total}`
+
+**5. SecondClassUserActivityDB 类**
+
+- 管理 `second_class_user_activities` 表
+- upsert_activities(): 批量插入活动ID（去重）
+- get_by_student_id(): 按学号查所有未结束活动
+- get_activity_ids_by_student_id(): 仅查 activity_id 列表
+- delete_by_activity_id(): 按活动ID删除
+- clear_by_student_id(): 清空指定学生记录
+
+### 2个DB表
+
+**second_class_user_activities 表**（新增）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | INTEGER PK AUTO | 自增主键 |
+| qq | INTEGER | QQ号 |
+| student_id | TEXT NOT NULL | 学号 |
+| activity_id | TEXT NOT NULL | 活动ID |
+| fetched_at | TEXT | 抓取时间 |
+| can_apply | TEXT | 是否可报名（兼容旧表） |
+| 唯一索引 | (student_id, activity_id) | 防止重复记录 |
+| 索引 | (qq) | 加速按QQ查询 |
+
+
+### 异常体系
+
+- **SecondClassAuthError** — 二课认证过期，提示用户重新扫码登录
+- **ActivityApplyError** — 报名业务异常，包含具体原因：
+- "你已经报名活动「xxx」"（基于 ok2.png 检测）
+- "活动「xxx」报名未开始"
+- "活动「xxx」报名已截止"
+- "活动「xxx」报名人数已满"
+
+### 执行注意事项
+
+1. **会话管理**：新版 (monitor_forward.py) 使用 core/user_session.py 的全局会话管理器，旧版 (qq_forward.py) 使用独立的 _LoginSession 字典，两者互不兼容
+2. **凭证查找**：新版通过 accounts.json 查找凭证，旧版通过 users.db 的 UserDB 查找
+3. **缓存策略**：活动卡片渲染使用缓存（CARD_DIR / {aid}.png），仅缓存未命中时实时拉取
+4. **懒加载 Session**：_cmd_my_er() 中首次缓存未命中时才获取二课 Session，避免无效请求
+5. **验证码免输**：当 fetch_apply_page 返回 need_captcha=False 时，直接提交报名，无需用户输入验证码
+
+## Agent 扩展使用计划
+
+### SubAgent
+
+- **code-explorer**
+- 用途：在第一步中定位 commit d312b4c 涉及的所有核心文件变更，提取 _cmd_apply、_bg_apply_submit、fetch_apply_page、fetch_verifycode_image、submit_activity_apply 等核心函数的完整代码片段
+- 预期产出：每个核心函数的行号范围 + 完整代码内容
+
+- **SSO Tools Guide**
+- 用途：在第一步中分析报名功能的3层架构和与项目现有模块（二课认证、会话管理）的交互关系
+- 预期产出：架构数据流图 + 模块依赖关系分析
+
+### Skill
+
+- **guide**
+- 用途：在第三步编写 plan 文档时，如需要参考项目现有文档格式（CLAUDE.md / DEVELOPER.md）中的架构描述风格，可激活此 skill
+- 预期产出：符合项目文档规范的 plan 文档
