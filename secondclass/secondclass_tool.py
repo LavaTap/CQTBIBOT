@@ -651,6 +651,186 @@ class SecondClassActivityDetailDB:
             return [r[0] for r in rows]
 
 
+# ════════════════════ 用户未结束活动 DB ════════════════════
+
+
+class SecondClassUserActivityDB:
+    """users.db 中 second_class_user_activities / second_class_users 表的操作。
+
+    - second_class_user_activities: 1 行/活动/学生（旧版按活动存储）
+    - second_class_users:          1 行/学生，unfinished_activity_ids 逗号分隔（按用户存储）
+
+    用于 #我的二课 指令快速查询活动列表。
+    """
+
+    def __init__(self, db_path: Path = USER_DB_FILE) -> None:
+        self._path = db_path
+        self._lock = threading.Lock()
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self._path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    @staticmethod
+    def _join(ids: list[str]) -> str:
+        seen, out = set(), []
+        for x in ids:
+            if x and x not in seen:
+                seen.add(x)
+                out.append(x)
+        return ",".join(out)
+
+    @staticmethod
+    def _split(csv: str | None) -> list[str]:
+        if not csv:
+            return []
+        return [x for x in csv.split(",") if x]
+
+    def _init_db(self) -> None:
+        with self._lock:
+            conn = self._connect()
+            # 旧表：一活动一行
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS second_class_user_activities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    qq INTEGER DEFAULT 0,
+                    student_id TEXT NOT NULL,
+                    activity_id TEXT NOT NULL,
+                    fetched_at TEXT DEFAULT ''
+                )
+            """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_user_act_sid_aid
+                ON second_class_user_activities(student_id, activity_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_act_sid
+                ON second_class_user_activities(student_id)
+            """)
+            # 新表：一学生一行，unfinished_activity_ids 逗号分隔
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS second_class_users (
+                    qq INTEGER PRIMARY KEY,
+                    student_id TEXT NOT NULL UNIQUE,
+                    unfinished_activity_ids TEXT DEFAULT '',
+                    reserved_activity_ids TEXT DEFAULT '',
+                    reservations_meta TEXT DEFAULT '{}',
+                    updated_at TEXT DEFAULT ''
+                )
+            """)
+            conn.commit()
+            conn.close()
+
+    def upsert_activities(self, student_id: str, activities: list[dict], qq: int = 0) -> int:
+        """批量插入活动ID，按 (student_id, activity_id) 去重。"""
+        if not activities or not student_id:
+            return 0
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        count = 0
+        with self._lock:
+            conn = self._connect()
+            for act in activities:
+                aid = act.get("activity_id", "")
+                if not aid:
+                    continue
+                conn.execute("""
+                    INSERT OR IGNORE INTO second_class_user_activities
+                        (qq, student_id, activity_id, fetched_at)
+                    VALUES (?, ?, ?, ?)
+                """, (qq, student_id, aid, now_iso))
+                count += 1
+            conn.commit()
+            conn.close()
+        return count
+
+    def clear_by_student(self, student_id: str) -> int:
+        """清空指定学生的所有记录。"""
+        if not student_id:
+            return 0
+        with self._lock:
+            conn = self._connect()
+            cur = conn.execute(
+                "DELETE FROM second_class_user_activities WHERE student_id=?",
+                (student_id,),
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            conn.close()
+        return deleted
+
+    def get_activity_ids_by_student_id(self, student_id: str) -> list[str]:
+        """按学号查询所有未结束活动ID列表。"""
+        if not student_id:
+            return []
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT activity_id FROM second_class_user_activities WHERE student_id=?",
+                (student_id,),
+            ).fetchall()
+            conn.close()
+            return [r["activity_id"] for r in rows]
+
+    def get_by_student_id(self, student_id: str) -> list[dict]:
+        """按学号查询所有未结束活动记录。"""
+        if not student_id:
+            return []
+        with self._lock:
+            conn = self._connect()
+            rows = conn.execute(
+                "SELECT * FROM second_class_user_activities WHERE student_id=?",
+                (student_id,),
+            ).fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+
+    # ════════════════════ second_class_users 操作 ════════════════════
+
+    def update_unfinished_ids(self, *, student_id: str, activity_ids: list[str], qq: int = 0) -> None:
+        """更新 second_class_users 表的 unfinished_activity_ids 字段。"""
+        if not student_id:
+            return
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        csv = self._join(activity_ids)
+        with self._lock:
+            conn = self._connect()
+            row = conn.execute(
+                "SELECT qq FROM second_class_users WHERE student_id=?", (student_id,)
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """UPDATE second_class_users
+                       SET unfinished_activity_ids=?, updated_at=?
+                       WHERE student_id=?""",
+                    (csv, now_iso, student_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO second_class_users
+                       (qq, student_id, unfinished_activity_ids, updated_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (qq or 0, student_id, csv, now_iso),
+                )
+            conn.commit()
+            conn.close()
+
+    def get_unfinished_ids_by_student_id(self, student_id: str) -> list[str]:
+        """从 second_class_users.unfinished_activity_ids 读取逗号分隔的活动ID。"""
+        if not student_id:
+            return []
+        with self._lock:
+            conn = self._connect()
+            row = conn.execute(
+                "SELECT unfinished_activity_ids FROM second_class_users WHERE student_id=?",
+                (student_id,),
+            ).fetchone()
+            conn.close()
+        return self._split(row["unfinished_activity_ids"] if row else "")
+
+
 # ════════════════════ API 调用 ════════════════════
 
 
@@ -2581,6 +2761,55 @@ def _fetch_paginated_my_activity(
             break
 
     return all_activities
+
+
+# ════════════════════ 未结束活动（报名中+活动中+未开始）拉取 ════════════════════
+
+
+def fetch_and_store_my_unfinished_activities(
+    sess: requests.Session,
+    student_id: str,
+    qq: int = 0,
+) -> dict:
+    """拉取用户的未结束活动（报名中+活动中+未开始）并存入独立表。
+
+    返回: { "tab1_count": N, "tab2_count": N, "tab5_count": N, "total": N }
+    """
+    result: dict = {"tab1_count": 0, "tab2_count": 0, "tab5_count": 0, "total": 0}
+    try:
+        my_activities = fetch_all_my_activities(sess)
+    except Exception as e:
+        log.warning("二课未结束活动拉取失败: student_id=%s error=%s", student_id, e)
+        return result
+
+    # 只关注"未结束"标签：报名中、活动中、未开始
+    unfinished_tabs = ["报名中", "活动中", "未开始"]
+    all_unfinished: list[dict] = []
+    for tab_name in unfinished_tabs:
+        acts = my_activities.get(tab_name, [])
+        all_unfinished.extend(acts)
+
+    if not all_unfinished:
+        log.info("二课未结束活动: student_id=%s 无未结束活动", student_id)
+        return result
+
+    # 写入 old 表（一活动一行）
+    db = SecondClassUserActivityDB()
+    db.clear_by_student(student_id)
+    count = db.upsert_activities(student_id, all_unfinished, qq=qq)
+
+    # 写入 new 表（一学生一行，逗号分隔）
+    activity_ids_only = [a.get("activity_id", "") for a in all_unfinished if a.get("activity_id")]
+    db.update_unfinished_ids(student_id=student_id, activity_ids=activity_ids_only, qq=qq)
+
+    result["tab1_count"] = len(my_activities.get("报名中", []))
+    result["tab2_count"] = len(my_activities.get("活动中", []))
+    result["tab5_count"] = len(my_activities.get("未开始", []))
+    result["total"] = count
+
+    log.info("二课未结束活动: student_id=%s 共 %d 个 (报名中=%d, 活动中=%d, 未开始=%d)",
+             student_id, count, result["tab1_count"], result["tab2_count"], result["tab5_count"])
+    return result
 
 
 # ════════════════════ 二课总表调度 ════════════════════

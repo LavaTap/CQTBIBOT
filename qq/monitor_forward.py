@@ -2147,10 +2147,10 @@ class CommandHandler:
 
             realname = sc_data.get("realname", "") if sc_data else ""
 
-            # ── 2. 从独立表读取未结束活动ID ──
+            # ── 2. 从 second_class_users.unfinished_activity_ids 读取未结束活动ID ──
             from secondclass.secondclass_tool import SecondClassUserActivityDB
             user_act_db = SecondClassUserActivityDB()
-            activity_ids = user_act_db.get_activity_ids_by_student_id(student_id)
+            activity_ids = user_act_db.get_unfinished_ids_by_student_id(student_id)
 
             # 缓存未命中 → 现场拉取一次再读
             if not activity_ids:
@@ -2169,7 +2169,7 @@ class CommandHandler:
                             fetch_and_store_my_unfinished_activities(
                                 sess, student_id, qq=user_id,
                             )
-                            activity_ids = user_act_db.get_activity_ids_by_student_id(student_id)
+                            activity_ids = user_act_db.get_unfinished_ids_by_student_id(student_id)
                     except Exception as e:
                         log.warning("#我的二课 现场拉取失败: %s", e)
 
