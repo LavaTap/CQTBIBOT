@@ -22,6 +22,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("schedule_image")
 
+# ---------- 课表渲染屏蔽课程名关键词 ----------
+FILTERED_COURSE_KEYWORDS: list[str] = ["AI", "AIGC"]
+
+
+def _should_filter_course(name: str) -> bool:
+    """判断课程是否应被渲染屏蔽。"""
+    upper = name.upper()
+    return any(kw.upper() in upper for kw in FILTERED_COURSE_KEYWORDS)
+
+
 # ---------- 常量 ----------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SCHEDULE_DIR = PROJECT_ROOT / "schedules"
@@ -200,6 +210,10 @@ class ScheduleRenderer:
     def __init__(self, schedule: Schedule, week_num: int) -> None:
         self.schedule = schedule
         self.week_num = week_num
+        # 渲染前过滤掉屏蔽课程
+        self._filtered_courses = [
+            c for c in schedule.courses if not _should_filter_course(c.name)
+        ]
 
     def render(self) -> Image.Image:
         """渲染完整周课表图片。"""
@@ -270,7 +284,7 @@ class ScheduleRenderer:
         y += 4
 
         # --- 时段列表 ---
-        courses = self.schedule.courses
+        courses = self._filtered_courses
         for ps, pe, label in PERIOD_SEGMENTS:
             matches = [
                 c for c in courses
@@ -393,7 +407,7 @@ class ScheduleRenderer:
         """绘制网格主体，返回底部的 y 坐标。"""
         x_start = MARGIN
         grid_width = PERIOD_COL_WIDTH + 7 * DAY_COL_WIDTH
-        courses = self.schedule.courses
+        courses = self._filtered_courses
         y = y_start
 
         for seg_idx, (ps, pe, label) in enumerate(PERIOD_SEGMENTS):

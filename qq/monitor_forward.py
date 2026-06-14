@@ -584,6 +584,15 @@ class CommandHandler:
             self._reply(msg_type, group_id, user_id, "正在发送模板课表…")
             self._forward_files(msg_type, group_id, user_id,
                                 [xlsx_path], "模板课表(2403740)")
+
+            # 4. 渲染合并课表全部周次图片（原课表 + -new.json）
+            from schedule import _load_merged_schedule
+            merged = _load_merged_schedule(json_path)
+            if merged and merged.courses:
+                self._render_and_send_all_weeks(
+                    merged, TEMPLATE_STUDENT_ID, msg_type, group_id, user_id,
+                    label="模板课表",
+                )
         except Exception as e:
             log.error("模板课表更新异常: %s", e)
             self._reply(msg_type, group_id, user_id,
@@ -1441,8 +1450,14 @@ class CommandHandler:
                 self._reply(msg_type, group_id, user_id,
                             f"课表更新成功！共 {len(schedule.courses)} 门课")
 
-                # 自动渲染本周课表
-                self._cmd_week_schedule(msg_type, group_id, user_id, None)
+                # 自动渲染全部周次课表（含合并）
+                from schedule import _load_merged_schedule
+                merged = _load_merged_schedule(json_path)
+                if merged and merged.courses:
+                    self._render_and_send_all_weeks(
+                        merged, student_id, msg_type, group_id, user_id,
+                        label="合并课表",
+                    )
 
                 # 自动更新二课信息
                 self._cmd_er_info(msg_type, group_id, user_id)
@@ -1528,8 +1543,14 @@ class CommandHandler:
                     self._reply(msg_type, gid, uid,
                                 f"课表更新成功！共 {len(schedule.courses)} 门课")
 
-                    # 自动渲染本周课表
-                    self._cmd_week_schedule(msg_type, gid, uid, None)
+                    # 自动渲染全部周次课表（含合并）
+                    from schedule import _load_merged_schedule
+                    merged = _load_merged_schedule(json_path)
+                    if merged and merged.courses:
+                        self._render_and_send_all_weeks(
+                            merged, student_id, msg_type, gid, uid,
+                            label="合并课表",
+                        )
 
                     # 自动更新二课信息
                     self._cmd_er_info(msg_type, gid, uid)
@@ -1552,13 +1573,58 @@ class CommandHandler:
         finally:
             remove_session(user_id)
 
+    # ---- 课表渲染辅助 ----
+
+    def _render_and_send_schedule(
+        self, schedule, student_id: str,
+        msg_type: str, group_id: int, user_id: int,
+        week_num: int | None = None, label: str = "课表",
+    ) -> None:
+        """渲染课表图片并发送。"""
+        try:
+            from schedule.schedule_image import render_schedule_image, get_current_week_num
+            if week_num is None:
+                week_num = get_current_week_num(schedule.semester)
+                if week_num == 0:
+                    return
+            png_path = render_schedule_image(schedule, week_num, student_id)
+            self._reply_image(msg_type, group_id, user_id, png_path,
+                              f"第{week_num}周{label}")
+        except Exception as e:
+            log.error("渲染%s失败: %s", label, e)
+
+    def _render_and_send_all_weeks(
+        self, schedule, student_id: str,
+        msg_type: str, group_id: int, user_id: int,
+        label: str = "课表",
+    ) -> None:
+        """渲染合并课表从本周起（current_week~max_week）图片，打包为文件发送。"""
+        try:
+            from schedule.schedule_image import render_schedule_image, get_current_week_num
+            max_week = schedule._max_week()
+            if max_week <= 1:
+                return
+            current_week = get_current_week_num(schedule.semester)
+            if current_week <= 0:
+                current_week = 1
+            self._reply(msg_type, group_id, user_id,
+                        f"正在渲染第{current_week}-{max_week}周{label}，请稍候…")
+            png_paths: list[Path] = []
+            for week_num in range(current_week, max_week + 1):
+                png_path = render_schedule_image(schedule, week_num, student_id)
+                png_paths.append(png_path)
+            self._forward_files(msg_type, group_id, user_id, png_paths,
+                                f"{label}(第{current_week}-{max_week}周)")
+        except Exception as e:
+            log.error("渲染全部周次%s失败: %s", label, e)
+
     # ======================== 指令: 课表图片 ========================
 
     def _load_user_schedule(self, msg_type: str, group_id: int, user_id: int):
         """根据 QQ 号查找学号并加载本地 JSON 课表。返回 (Schedule, student_id) 或 None。"""
         try:
             from core.account_store import find_account_by_qq
-            from schedule import _load_schedule_from_json
+            from schedule import _load_merged_schedule
 
             acc = find_account_by_qq(user_id)
             if not acc:
@@ -1585,7 +1651,7 @@ class CommandHandler:
                 return None
 
             latest_json = json_files[-1]
-            schedule = _load_schedule_from_json(latest_json)
+            schedule = _load_merged_schedule(latest_json)
             if not schedule or not schedule.courses:
                 self._reply(msg_type, group_id, user_id,
                             "课表数据为空，请先使用 #更新课表")
@@ -1725,8 +1791,14 @@ class CommandHandler:
             self._reply(msg_type, group_id, user_id,
                         f"课表更新成功！共 {len(schedule.courses)} 门课")
 
-            # 5. 自动渲染并发送本周课表
-            self._cmd_week_schedule(msg_type, group_id, user_id, None)
+            # 5. 自动渲染并发送全部周次课表（含合并）
+            from schedule import _load_merged_schedule
+            merged = _load_merged_schedule(json_path)
+            if merged and merged.courses:
+                self._render_and_send_all_weeks(
+                    merged, student_id, msg_type, group_id, user_id,
+                    label="合并课表",
+                )
 
         except ScheduleError as e:
             log.error("课表更新失败: %s", e)
@@ -1745,7 +1817,7 @@ class CommandHandler:
         """导出最新课表为Excel文件并发送。"""
         try:
             from core.account_store import find_account_by_qq
-            from schedule import _schedule_path, _load_schedule_from_json
+            from schedule import _schedule_path, _load_merged_schedule
 
             acc = find_account_by_qq(user_id)
             if not acc:
@@ -1772,7 +1844,7 @@ class CommandHandler:
                             "尚无课表数据，请先使用 #更新课表")
                 return
 
-            schedule = _load_schedule_from_json(json_files[-1])
+            schedule = _load_merged_schedule(json_files[-1])
             if not schedule or not schedule.courses:
                 self._reply(msg_type, group_id, user_id,
                             "课表数据为空，请先使用 #更新课表")

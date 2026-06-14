@@ -2,7 +2,7 @@
   "connections": {
     "main": {
       "ws_url": "ws://127.0.0.1:3001",
-      "access_token": "n8mSTQs2C2lPPP.J"
+      "access_token": "B3WfhL~dV_-~vAn0"
     },
     "转发": {
       "ws_url": "ws://127.0.0.1:3002",
@@ -17,7 +17,7 @@
     307548801
   ],
   "admin_qq": 3200418862,
-  "command_enabled": true,
+  "command_enabled": false,
   "monitor_ws_url": "ws://127.0.0.1:3001",
   "monitor_access_token": "n8mSTQs2C2lPPP.J"
 }

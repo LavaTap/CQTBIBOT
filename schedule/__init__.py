@@ -11,11 +11,11 @@
 from schedule.models import Course, Schedule, ScheduleError
 from schedule.parser import ScheduleParser
 from schedule.jwgl_client import JWGLClient
-from schedule.io import _schedule_path, _load_schedule_from_json, _migrate_schedule_files, SCHEDULE_DIR
+from schedule.io import _schedule_path, _load_schedule_from_json, _load_merged_schedule, _migrate_schedule_files, SCHEDULE_DIR
 
 __all__ = [
     "Course", "Schedule", "ScheduleError",
     "ScheduleParser", "JWGLClient",
-    "_schedule_path", "_load_schedule_from_json", "_migrate_schedule_files",
-    "SCHEDULE_DIR",
+    "_schedule_path", "_load_schedule_from_json", "_load_merged_schedule",
+    "_migrate_schedule_files", "SCHEDULE_DIR",
 ]

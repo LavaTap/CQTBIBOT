@@ -50,6 +50,22 @@ def _migrate_schedule_files() -> None:
             log.warning("迁移失败: %s → %s: %s", old_path, new_path, e)
 
 
+def _load_merged_schedule(json_path: Path) -> Schedule | None:
+    """加载 base JSON，若存在 -new.json 则合并课程，返回合并后的 Schedule。
+
+    不会修改磁盘上的文件，仅在内存中合并。
+    """
+    base = _load_schedule_from_json(json_path)
+    if base is None:
+        return None
+    new_path = json_path.parent / (json_path.stem + "-new.json")
+    if new_path.exists():
+        new_sched = _load_schedule_from_json(new_path)
+        if new_sched and new_sched.courses:
+            base.merge(new_sched)
+    return base
+
+
 def _load_schedule_from_json(path: Path) -> Schedule | None:
     """从 JSON 文件加载 Schedule 对象。"""
     if not path.exists():

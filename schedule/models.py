@@ -6,7 +6,16 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# 保存 JSON 时屏蔽的课程名关键词（不录入磁盘）
+_FILTERED_COURSE_KEYWORDS: list[str] = ["AI", "AIGC"]
+
 log = logging.getLogger("schedule.models")
+
+
+def _should_skip_course(name: str) -> bool:
+    """判断课程名是否匹配屏蔽关键词（不保存到 JSON）。"""
+    upper = name.upper()
+    return any(kw.upper() in upper for kw in _FILTERED_COURSE_KEYWORDS)
 
 
 class ScheduleError(Exception):
@@ -58,6 +67,24 @@ class Schedule:
     fetched_at: str = ""
     courses: list[Course] = field(default_factory=list)
 
+    def _course_key(self, c: Course) -> tuple:
+        """课程去重键。"""
+        return (
+            c.name.strip(), c.teacher.strip(), c.weeks.strip(),
+            c.day, c.period_start, c.period_end, c.room.strip(),
+        )
+
+    def merge(self, other: Schedule) -> int:
+        """将 other 的课程合并进来（按去重键去重），返回新增课程数。"""
+        existing = {self._course_key(c) for c in self.courses}
+        added = 0
+        for c in other.courses:
+            if self._course_key(c) not in existing:
+                existing.add(self._course_key(c))
+                self.courses.append(c)
+                added += 1
+        return added
+
     def to_dict(self) -> dict:
         return {
             "semester": self.semester,
@@ -69,8 +96,12 @@ class Schedule:
 
     def save_json(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        data = self.to_dict()
+        # 过滤掉匹配屏蔽关键词的课程（不录入磁盘）
+        data["courses"] = [c for c in data["courses"]
+                           if not _should_skip_course(c["name"])]
         path.write_text(
-            json.dumps(self.to_dict(), ensure_ascii=False, indent=2),
+            json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
