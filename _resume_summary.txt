@@ -1,0 +1,1 @@
+沈昱作，27届，重庆工商技术学院大数据专业，应聘技术美术实习生（工具方向）。掌握Python/requests/Pillow/SQLite/GraphQL/React/TypeScript/Vite/Unity/OneBot v11/OAuth2。实习经历：搜狐畅游技术美术实习生（AI玩法分析工具、LoRA训练Agent、自动化Pipeline）、百度技术美术实习生（AR特效、模型绑定、美术管线）、九果一麦3D手绘模型实习生（Unity二次元手游角色资产、AI建模减面）。项目：Game-sc-skill（AI游戏截图爬取与策划分析）、Lightbulb AI（AI美术平台）、CQTBIBOT（SSO教务QQ机器人）。

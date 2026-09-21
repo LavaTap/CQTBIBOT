@@ -1,0 +1,134 @@
+{
+  "semester": "2026-2027-1",
+  "student_id": "2403740",
+  "student_name": "",
+  "fetched_at": "2026-09-06T11:18:48",
+  "courses": [
+    {
+      "name": "岗位强化训练III（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "3-5,7-13",
+      "day": 2,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "职业规划与就业指导2",
+      "teacher": "昝芋",
+      "room": "修德楼C402",
+      "weeks": "2,4,6-7",
+      "day": 4,
+      "period_start": 1,
+      "period_end": 3
+    },
+    {
+      "name": "大数据项目综合实训",
+      "teacher": "王忠萌",
+      "room": "A506大数据开发实训室",
+      "weeks": "2-3,6-13",
+      "day": 5,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "形势与政策5",
+      "teacher": "朱勋春",
+      "room": "",
+      "weeks": "10",
+      "day": 6,
+      "period_start": 1,
+      "period_end": 8
+    },
+    {
+      "name": "岗位强化训练II（大数据）",
+      "teacher": "廖海燕",
+      "room": "A506大数据开发实训室",
+      "weeks": "3",
+      "day": 7,
+      "period_start": 1,
+      "period_end": 5
+    },
+    {
+      "name": "岗位强化训练III（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "3-5,7-10",
+      "day": 1,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "岗位强化训练II（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "4-5,7-12",
+      "day": 3,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "职业规划与就业指导2",
+      "teacher": "昝芋",
+      "room": "励志楼D408",
+      "weeks": "11-12",
+      "day": 4,
+      "period_start": 4,
+      "period_end": 5
+    },
+    {
+      "name": "岗位强化训练I（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "3-5,7-13",
+      "day": 1,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "岗位强化训练II（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "3-5,7-13",
+      "day": 2,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "大数据项目综合实训",
+      "teacher": "王忠萌",
+      "room": "A506大数据开发实训室",
+      "weeks": "13",
+      "day": 5,
+      "period_start": 6,
+      "period_end": 10
+    },
+    {
+      "name": "岗位强化训练I（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "4",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 12
+    },
+    {
+      "name": "岗位强化训练III（大数据）",
+      "teacher": "廖海燕",
+      "room": "桔园Z103校企合作实训室",
+      "weeks": "7-8",
+      "day": 3,
+      "period_start": 9,
+      "period_end": 12
+    },
+    {
+      "name": "岗位实习1  1-20周;大数据项目综合实训 王忠萌 1-20周;",
+      "teacher": "",
+      "room": "",
+      "weeks": "",
+      "day": 1,
+      "period_start": 0,
+      "period_end": 0
+    }
+  ]
+}
